@@ -1,0 +1,26 @@
+.main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  width: 100vw;
+}
+
+.main h1 {
+  font-weight: 500;
+  margin: 70px 0 25px;
+}
+
+.note {
+  background: var(--light-blue);
+  max-width: 500px;
+  font-size: 0.8rem;
+  margin: 0 15px;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.content {
+  flex: 1;
+}

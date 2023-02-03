@@ -1,0 +1,15 @@
+.container {
+  height: 100%;
+  width: max-content;
+}
+
+.front,
+.back {
+  display: flex;
+  position: absolute;
+  transform-origin: 100% 0%;
+}
+
+.placeholder {
+  visibility: hidden;
+}
