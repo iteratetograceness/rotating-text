@@ -19,7 +19,12 @@ export default function RootLayout({
         head.tsx. Find out more at https://beta.nextjs.org/docs/api-reference/file-conventions/head
       */}
       <head />
-      <body className={poppins.className}>{children}</body>
+      <body className={poppins.className}>
+        {children}
+        <footer>
+          © <a href='https://joonie.dev'>Jueun Grace Yun</a>
+        </footer>
+      </body>
     </html>
   )
 }
