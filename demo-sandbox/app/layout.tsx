@@ -1,4 +1,5 @@
 import { Poppins } from '@next/font/google'
+import { AnalyticsWrapper } from './components/analytics'
 import './globals.css'
 
 const poppins = Poppins({
@@ -24,6 +25,7 @@ export default function RootLayout({
         <footer>
           © <a href='https://joonie.dev'>Jueun Grace Yun</a>
         </footer>
+        <AnalyticsWrapper />
       </body>
     </html>
   )
