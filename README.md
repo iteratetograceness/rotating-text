@@ -3,7 +3,7 @@
 > Customizable 3D text hover animation.
 > Created using Framer Motion.
 > Respects user's Reduced Motion preferences.
-> Visit the demo [here](www.rotating-text.vercel.app), optimized for Desktop.
+> Visit the demo [here](https://rotating-text.vercel.app/), optimized for Desktop.
 
 ## Install
 
