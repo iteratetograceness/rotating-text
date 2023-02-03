@@ -1,6 +1,6 @@
 {
   "name": "rotating-text",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "3D Rotating Text Component for React",
   "author": "jueungrace",
   "license": "MIT",
@@ -17,13 +17,9 @@
     "prepare": "run-s build"
   },
   "peerDependencies": {
-    "react": "^16.0.0"
+    "react": "^18.0.0"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^4.2.4",
-    "@testing-library/react": "^9.5.0",
-    "@testing-library/user-event": "^7.2.1",
-    "@types/jest": "^25.1.4",
     "@types/node": "^12.12.38",
     "@types/react": "^16.9.27",
     "@types/react-dom": "^16.9.7",
@@ -41,7 +37,7 @@
     "eslint-plugin-promise": "^4.2.1",
     "eslint-plugin-react": "^7.17.0",
     "eslint-plugin-standard": "^4.0.1",
-    "gh-pages": "^2.2.0",
+    "framer-motion": "^9.0.1",
     "microbundle-crl": "^0.13.10",
     "npm-run-all": "^4.1.5",
     "prettier": "^2.0.4",
@@ -52,8 +48,5 @@
   },
   "files": [
     "dist"
-  ],
-  "dependencies": {
-    "framer-motion": "^8.5.5"
-  }
+  ]
 }
