@@ -2,9 +2,9 @@ import styles from './page.module.css'
 import { Example } from './components/example'
 import { CodeSnippet } from './components/code-snippet'
 
-const CODE_SNIPPET = `import React, { Component } from 'react'
+const CODE_SNIPPET = `import React from 'react'
 
-import RotatingText from 'rotating-text'
+import { RotatingText } from 'rotating-text'
 import 'rotating-text/dist/index.css'
 
 function MyApp {
