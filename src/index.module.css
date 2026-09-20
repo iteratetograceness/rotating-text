@@ -7,9 +7,118 @@
 .back {
   display: flex;
   position: absolute;
-  transform-origin: 100% 0%;
+}
+
+/* Copies drawn only for the animation stay out of text selection, so
+   copying the text gives each letter once. */
+.copy {
+  user-select: none;
+}
+
+/* Each letter turns about an axis half a line behind it, like the face of a
+   cube, and disappears once it faces away. */
+.face {
+  --rt-depth: 0.55em;
+  display: inline-block;
+  backface-visibility: hidden;
+}
+
+@supports (height: 1lh) {
+  .face {
+    --rt-depth: 0.5lh;
+  }
 }
 
 .placeholder {
   visibility: hidden;
+}
+
+/* Split-flap tiles. Colours and sizes come from custom properties so a page
+   can restyle the board without reaching into the markup. */
+.board {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--rt-gap, 0.08em);
+}
+
+.tile {
+  position: relative;
+  display: inline-block;
+  user-select: none;
+  /* The tile and its flap are layers that snap to the same pixel, so the
+     top and bottom halves of a letter line up exactly at the seam. */
+  will-change: transform;
+  perspective: var(--rt-perspective, 3.5em);
+  border-radius: var(--rt-radius, 0.06em);
+  /* The seam colour only fills the band behind the gap between the halves,
+     so it can't fringe the tile's outer edges. */
+  background: linear-gradient(
+    to bottom,
+    transparent calc(50% - var(--rt-seam-width, max(1px, 0.012em))),
+    var(--rt-seam, #000) calc(50% - var(--rt-seam-width, max(1px, 0.012em))),
+    var(--rt-seam, #000) calc(50% + var(--rt-seam-width, max(1px, 0.012em))),
+    transparent calc(50% + var(--rt-seam-width, max(1px, 0.012em)))
+  );
+  color: var(--rt-ink, inherit);
+}
+
+.sizer,
+.half {
+  display: block;
+  min-width: var(--rt-tile-width, 0.62em);
+  padding: var(--rt-padding, 0.08em 0.1em);
+  box-sizing: border-box;
+  text-align: center;
+  white-space: pre;
+}
+
+.sizer {
+  visibility: hidden;
+}
+
+.readable {
+  user-select: text;
+}
+
+.half {
+  position: absolute;
+  inset: 0;
+  background: var(--rt-tile, #1d1d1f);
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.top {
+  clip-path: inset(0 0 calc(50% + var(--rt-seam-width, max(1px, 0.012em)) / 2) 0);
+}
+
+.bottom {
+  clip-path: inset(calc(50% + var(--rt-seam-width, max(1px, 0.012em)) / 2) 0 0 0);
+}
+
+.flap {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  /* Kept on its own layer at rest too, so the seam and letters render the
+     same before, during and after a flip. */
+  will-change: transform;
+  border-radius: inherit;
+}
+
+.leaf {
+  backface-visibility: hidden;
+}
+
+/* The back of the flap carries the bottom half, upside down until it lands. */
+.underside {
+  transform: rotateX(180deg);
+}
+
+.shade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
 }

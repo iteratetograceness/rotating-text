@@ -1,12 +1,33 @@
+/* Departures: the page is a split-flap board. Dark is the default look,
+   the light theme is the printed timetable pinned beside it. */
 :root {
-  --black: hsl(195, 46%, 5%);
-  --light-gray: hsl(12, 6%, 85%);
-  --dark-blue: hsl(224, 59%, 37%);
-  --light-blue: hsl(216, 25%, 75%);
-  --yellow: hsl(41, 68%, 54%);
-  --brown: hsl(18, 71%, 33%);
-  --light-brown: hsl(21, 38%, 55%);
-  --red: hsl(12, 61%, 47%);
+  color-scheme: dark;
+  --board: #0e1526;
+  --flap: #182139;
+  --seam: #070b15;
+  --rule: #26314f;
+  --ink: #f1ece1;
+  --dim: #8b94a8;
+  --signal: #dca43a;
+  --signal-ink: #0e1526;
+
+  --display: var(--font-display), 'Arial Narrow', sans-serif;
+  --sans: var(--font-sans), 'Helvetica Neue', Arial, sans-serif;
+  --mono: var(--font-mono), ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --board: #ece8dd;
+    --flap: #fbf9f3;
+    --seam: #cfc9ba;
+    --rule: #d3cdbf;
+    --ink: #141a2a;
+    --dim: #626a7a;
+    --signal: #9a6608;
+    --signal-ink: #fbf9f3;
+  }
 }
 
 * {
@@ -21,16 +42,160 @@ body {
 }
 
 body {
-  color: var(--dark-blue);
-  background: var(--light-gray);
+  background: var(--board);
+  color: var(--ink);
+  font: 400 16px/1.6 var(--sans);
+  padding: 0 20px 64px;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
-  color: inherit;
-  text-decoration: none;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--signal);
+  text-underline-offset: 3px;
+  transition: color 120ms;
 }
 
-footer {
-  text-align: center;
-  margin: 50px 0;
+a:hover {
+  color: var(--signal);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  overflow-wrap: anywhere;
+}
+
+pre code {
+  font-size: inherit;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Mono, sentence case: every label on the board */
+.label {
+  font: 500 13px/1.4 var(--mono);
+  color: var(--dim);
+}
+
+.signal {
+  color: var(--signal);
+}
+
+/* The component in display type */
+.rt {
+  position: relative;
+  font-family: var(--display);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  user-select: none;
+}
+
+/* Letter tiles: styles the component's letters from outside. Each tile adds
+   0.19em across (padding plus margin), so the hidden placeholder that sizes
+   the component gets the same width back through letter-spacing. */
+.rt-tiles span {
+  background: linear-gradient(
+      to bottom,
+      transparent calc(50% - 0.5px),
+      var(--seam) calc(50% - 0.5px),
+      var(--seam) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    var(--flap);
+  padding: 0.06em 0.07em 0.08em;
+  margin-right: 0.05em;
+  border-radius: 0.05em;
+}
+
+.rt-tiles > div:last-child {
+  letter-spacing: 0.2em;
+  padding-block: 0.06em 0.08em;
+}
+
+/* The component's own split-flap tiles, in the board's colours */
+.rt-flap {
+  --rt-tile: var(--flap);
+  --rt-seam: var(--seam);
+  --rt-ink: var(--ink);
+  --rt-gap: 0.05em;
+  --rt-radius: 0.05em;
+}
+
+/* Copy buttons and code blocks, shared by every snippet on the page */
+button.copy {
+  font: 500 13px/1 var(--mono);
+  color: var(--signal-ink);
+  background: var(--signal);
+  border: 0;
+  border-radius: 4px;
+  padding: 8px 12px;
+  min-width: 72px;
+  cursor: pointer;
+}
+
+.code {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.code pre {
+  font: 400 13.5px/1.6 var(--mono);
+}
+
+/* A title bar above the code, so the button never covers a line */
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 8px 20px;
+  background: var(--flap);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Sections read like stops down the board */
+.section {
+  padding-top: 56px;
+  margin-top: 40px;
+  border-top: 1px solid var(--rule);
+}
+
+.section h2 {
+  font: 800 clamp(36px, 6vw, 56px) / 1 var(--display);
+  letter-spacing: 0.01em;
+  margin: 6px 0 20px;
+}
+
+.section p {
+  max-width: 66ch;
+  margin-bottom: 14px;
+}
+
+/* Finger-sized targets on touch screens */
+@media (pointer: coarse) {
+  button.copy {
+    min-height: 44px;
+    min-width: 80px;
+  }
 }

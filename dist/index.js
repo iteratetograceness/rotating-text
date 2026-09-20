@@ -8512,6 +8512,108 @@ const featureBundle = {
 const motion = /*@__PURE__*/ createMotionProxy((Component, config) => createDomMotionConfig(Component, config, featureBundle, createDomVisualElement, HTMLProjectionNode));
 
 /**
+ * Creates a `MotionValue` to track the state and velocity of a value.
+ *
+ * Usually, these are created automatically. For advanced use-cases, like use with `useTransform`, you can create `MotionValue`s externally and pass them into the animated component via the `style` prop.
+ *
+ * ```jsx
+ * export const MyComponent = () => {
+ *   const scale = useMotionValue(1)
+ *
+ *   return <motion.div style={{ scale }} />
+ * }
+ * ```
+ *
+ * @param initial - The initial state.
+ *
+ * @public
+ */
+function useMotionValue(initial) {
+    const value = useConstant(() => motionValue(initial));
+    /**
+     * If this motion value is being used in static mode, like on
+     * the Framer canvas, force components to rerender when the motion
+     * value is updated.
+     */
+    const { isStatic } = React.useContext(MotionConfigContext);
+    if (isStatic) {
+        const [, setLatest] = React.useState(initial);
+        React.useEffect(() => value.on("change", setLatest), []);
+    }
+    return value;
+}
+
+const isCustomValueType = (v) => {
+    return typeof v === "object" && v.mix;
+};
+const getMixer$1 = (v) => (isCustomValueType(v) ? v.mix : undefined);
+function transform(...args) {
+    const useImmediate = !Array.isArray(args[0]);
+    const argOffset = useImmediate ? 0 : -1;
+    const inputValue = args[0 + argOffset];
+    const inputRange = args[1 + argOffset];
+    const outputRange = args[2 + argOffset];
+    const options = args[3 + argOffset];
+    const interpolator = interpolate(inputRange, outputRange, {
+        mixer: getMixer$1(outputRange[0]),
+        ...options,
+    });
+    return useImmediate ? interpolator(inputValue) : interpolator;
+}
+
+function useCombineMotionValues(values, combineValues) {
+    /**
+     * Initialise the returned motion value. This remains the same between renders.
+     */
+    const value = useMotionValue(combineValues());
+    /**
+     * Create a function that will update the template motion value with the latest values.
+     * This is pre-bound so whenever a motion value updates it can schedule its
+     * execution in Framesync. If it's already been scheduled it won't be fired twice
+     * in a single frame.
+     */
+    const updateValue = () => value.set(combineValues());
+    /**
+     * Synchronously update the motion value with the latest values during the render.
+     * This ensures that within a React render, the styles applied to the DOM are up-to-date.
+     */
+    updateValue();
+    /**
+     * Subscribe to all motion values found within the template. Whenever any of them change,
+     * schedule an update.
+     */
+    useIsomorphicLayoutEffect(() => {
+        const scheduleUpdate = () => sync.update(updateValue, false, true);
+        const subscriptions = values.map((v) => v.on("change", scheduleUpdate));
+        return () => {
+            subscriptions.forEach((unsubscribe) => unsubscribe());
+            cancelSync.update(updateValue);
+        };
+    });
+    return value;
+}
+
+function useTransform(input, inputRangeOrTransformer, outputRange, options) {
+    const transformer = typeof inputRangeOrTransformer === "function"
+        ? inputRangeOrTransformer
+        : transform(inputRangeOrTransformer, outputRange, options);
+    return Array.isArray(input)
+        ? useListTransform(input, transformer)
+        : useListTransform([input], ([latest]) => transformer(latest));
+}
+function useListTransform(values, transformer) {
+    const latest = useConstant(() => []);
+    return useCombineMotionValues(values, () => {
+        latest.length = 0;
+        const numValues = values.length;
+        for (let i = 0; i < numValues; i++) {
+            latest[i] = values[i].get();
+        }
+        return transformer(latest);
+    });
+}
+
+/**
  * A hook that returns `true` if we should be using reduced motion based on the current device's Reduced Motion setting.
  *
  * This can be used to implement changes to your UI based on Reduced Motion. For instance, replacing motion-sickness inducing
@@ -8636,92 +8738,194 @@ function useAnimationControls() {
     return controls;
 }
 
-var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","placeholder":"_3HCUh"};
+var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK"};
 
-var RotatingText = function RotatingText(_ref) {
-  var text = _ref.text,
-    _ref$timing = _ref.timing,
-    timing = _ref$timing === void 0 ? 0.5 : _ref$timing,
-    _ref$stagger = _ref.stagger,
-    stagger = _ref$stagger === void 0 ? 0.1 : _ref$stagger,
-    className = _ref.className,
-    style = _ref.style;
+var ROLL_TIMES = [0, 0.64, 0.84, 1];
+var ROLL_EASE = [[0.45, 0, 0.25, 1], [0.4, 0, 0.6, 1], [0.4, 0, 0.6, 1]];
+var ROLL_IN = [90, -7, 2, 0];
+var ROLL_OUT = ROLL_IN.map(function (angle) {
+  return angle - 90;
+});
+var rollTransform = function rollTransform(_ref) {
+  var rotateX = _ref.rotateX;
+  return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + ") translateZ(var(--rt-depth))";
+};
+var ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85];
+var ROLL_SHADE = [0, 0.75, 1, 0.75, 0];
+var FLAP_TIMES = [0, 0.6, 0.74, 0.86, 0.93, 1];
+var FLAP_EASE = [[0.55, 0, 0.85, 0.35], [0.2, 0.6, 0.4, 1], [0.6, 0, 0.8, 0.4], [0.2, 0.6, 0.4, 1], [0.6, 0, 0.8, 0.4]];
+var FLAP_FALL = [0, -180, -166, -180, -175, -180];
+var RotatingText = function RotatingText(_ref2) {
+  var text = _ref2.text,
+    _ref2$timing = _ref2.timing,
+    timing = _ref2$timing === void 0 ? 0.5 : _ref2$timing,
+    _ref2$stagger = _ref2.stagger,
+    stagger = _ref2$stagger === void 0 ? 0.1 : _ref2$stagger,
+    _ref2$variant = _ref2.variant,
+    variant = _ref2$variant === void 0 ? 'roll' : _ref2$variant,
+    className = _ref2.className,
+    style = _ref2.style;
   var prefersReducedMotion = useReducedMotion();
+  var still = !!prefersReducedMotion;
   var animate = useAnimationControls();
-  var hoverArea = {
-    rotate: {
-      z: 0
-    }
-  };
-  var container = {
-    rotate: {
-      transition: {
-        staggerChildren: stagger
-      }
-    }
-  };
+  var busyUntil = React.useRef(0);
   var duration = function duration(i) {
     return Array.isArray(timing) ? timing[Math.min(i, timing.length - 1)] : timing;
   };
-  var wordCopy = prefersReducedMotion ? undefined : {
-    rotate: function rotate(i) {
-      return {
-        y: ['0%', '30%'],
-        rotateX: [0, 90],
-        scaleX: [1, 0.4],
-        scaleY: [1, 0.4],
-        transition: {
-          duration: duration(i)
-        }
-      };
-    }
+  var letters = splitLetters(text);
+  var transitionFor = function transitionFor(i) {
+    return {
+      duration: duration(i),
+      delay: i * stagger,
+      times: variant === 'flap' ? FLAP_TIMES : ROLL_TIMES,
+      ease: variant === 'flap' ? FLAP_EASE : ROLL_EASE
+    };
   };
-  var word = prefersReducedMotion ? undefined : {
-    rotate: function rotate(i) {
-      return {
-        y: ['-30%', '0%'],
-        rotateX: [-90, 0],
-        scaleX: [0.4, 1],
-        scaleY: [0.4, 1],
-        transition: {
-          duration: duration(i)
-        }
-      };
-    }
+  var flip = function flip() {
+    var now = performance.now();
+    if (still || now < busyUntil.current) return;
+    var longest = Math.max.apply(Math, letters.map(function (_, i) {
+      return i * stagger + duration(i);
+    }));
+    busyUntil.current = now + longest * 1000;
+    animate.start('rotate');
   };
+  var rootClass = [styles.container, variant === 'flap' ? styles.board : '', className].filter(Boolean).join(' ');
   return React.createElement(motion.div, {
-    className: className ? styles.container + " " + className : styles.container,
-    variants: hoverArea,
+    className: rootClass,
     animate: animate,
     initial: 'initial',
-    whileHover: prefersReducedMotion ? {
+    whileHover: still ? {
       scale: 1.05
     } : undefined,
-    onHoverStart: function onHoverStart() {
-      return animate.start('rotate');
-    },
+    onHoverStart: flip,
     style: style
-  }, React.createElement(motion.div, {
-    className: styles.front,
-    variants: container
-  }, Array.from(text).map(function (_char, i) {
-    return React.createElement(motion.span, {
-      custom: i,
+  }, variant === 'flap' ? letters.map(function (_char, i) {
+    return React.createElement(FlapTile, {
       key: "" + _char + i,
-      variants: wordCopy
-    }, _char);
-  })), React.createElement(motion.div, {
-    className: styles.back,
-    variants: container
-  }, Array.from(text).map(function (_char2, i) {
-    return React.createElement(motion.span, {
-      custom: i,
-      key: "" + _char2 + i + "copy",
-      variants: word
-    }, _char2);
+      "char": _char,
+      fall: still ? undefined : {
+        rotate: {
+          rotateX: FLAP_FALL,
+          transition: transitionFor(i)
+        }
+      }
+    });
+  }) : React.createElement(RollFaces, {
+    letters: letters,
+    front: still ? undefined : rollVariant(ROLL_OUT, transitionFor),
+    back: still ? undefined : rollVariant(ROLL_IN, transitionFor)
+  }));
+};
+var motionStyle = function motionStyle(style) {
+  return style;
+};
+var splitLetters = function splitLetters(text) {
+  var Segmenter = Intl.Segmenter;
+  return Segmenter ? Array.from(new Segmenter().segment(text), function (part) {
+    return part.segment;
+  }) : Array.from(text);
+};
+var rollVariant = function rollVariant(angles, transitionFor) {
+  return {
+    rotate: function rotate(i) {
+      return {
+        rotateX: angles,
+        transition: transitionFor(i)
+      };
+    }
+  };
+};
+var RollFaces = function RollFaces(_ref3) {
+  var letters = _ref3.letters,
+    front = _ref3.front,
+    back = _ref3.back;
+  return React.createElement(React.Fragment, null, React.createElement("div", {
+    className: styles.front
+  }, letters.map(function (_char2, i) {
+    return React.createElement(RollLetter, {
+      key: "" + _char2 + i,
+      "char": _char2,
+      index: i,
+      variants: front,
+      from: 0
+    });
+  })), React.createElement("div", {
+    className: styles.back + " " + styles.copy,
+    "aria-hidden": 'true'
+  }, letters.map(function (_char3, i) {
+    return React.createElement(RollLetter, {
+      key: "" + _char3 + i + "copy",
+      "char": _char3,
+      index: i,
+      variants: back,
+      from: ROLL_IN[0]
+    });
   })), React.createElement("div", {
     className: styles.placeholder
-  }, text));
+  }, letters.join('')));
+};
+var RollLetter = function RollLetter(_ref4) {
+  var _char4 = _ref4["char"],
+    index = _ref4.index,
+    variants = _ref4.variants,
+    from = _ref4.from;
+  var rotateX = useMotionValue(from);
+  var opacity = useTransform(rotateX, ROLL_SHADE_ANGLES, ROLL_SHADE);
+  return React.createElement(motion.span, {
+    custom: index,
+    variants: variants,
+    className: styles.face,
+    style: motionStyle({
+      rotateX: rotateX,
+      opacity: opacity
+    }),
+    transformTemplate: rollTransform
+  }, _char4);
+};
+var FlapTile = function FlapTile(_ref5) {
+  var _char5 = _ref5["char"],
+    fall = _ref5.fall;
+  var rotateX = useMotionValue(0);
+  var frontShade = useTransform(rotateX, [0, -90], [0, 0.55]);
+  var backShade = useTransform(rotateX, [-90, -180], [0.4, 0]);
+  var shadow = useTransform(rotateX, [-60, -150, -180], [0, 0.3, 0]);
+  return React.createElement("span", {
+    className: styles.tile
+  }, React.createElement("span", {
+    className: styles.sizer
+  }, _char5), React.createElement("span", {
+    className: styles.half + " " + styles.top + " " + styles.readable
+  }, _char5), React.createElement("span", {
+    className: styles.half + " " + styles.bottom,
+    "aria-hidden": 'true'
+  }, _char5, React.createElement(Shade, {
+    opacity: shadow
+  })), React.createElement(motion.span, {
+    "aria-hidden": 'true',
+    className: styles.flap,
+    variants: fall,
+    style: motionStyle({
+      rotateX: rotateX
+    })
+  }, React.createElement("span", {
+    className: styles.half + " " + styles.top + " " + styles.leaf
+  }, _char5, React.createElement(Shade, {
+    opacity: frontShade
+  })), React.createElement("span", {
+    className: styles.half + " " + styles.bottom + " " + styles.leaf + " " + styles.underside
+  }, _char5, React.createElement(Shade, {
+    opacity: backShade
+  }))));
+};
+var Shade = function Shade(_ref6) {
+  var opacity = _ref6.opacity;
+  return React.createElement(motion.span, {
+    className: styles.shade,
+    style: motionStyle({
+      opacity: opacity
+    })
+  });
 };
 
 exports.RotatingText = RotatingText;
