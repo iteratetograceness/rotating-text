@@ -8660,13 +8660,14 @@ var RotatingText = function RotatingText(_ref) {
       }
     }
   };
+  var letterCount = Array.from(text).length;
   var duration = React.useMemo(function () {
     if (Array.isArray(timing)) return timing;else return Array.from({
-      length: text.length
+      length: letterCount
     }, function () {
       return timing;
     });
-  }, [timing]);
+  }, [timing, letterCount]);
   var wordCopy = prefersReducedMotion ? undefined : {
     rotate: function rotate(i) {
       return {
@@ -8694,7 +8695,7 @@ var RotatingText = function RotatingText(_ref) {
     }
   };
   return React.createElement(motion.div, {
-    className: styles.container + " " + className,
+    className: className ? styles.container + " " + className : styles.container,
     variants: hoverArea,
     animate: animate,
     initial: 'initial',

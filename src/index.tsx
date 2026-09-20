@@ -28,10 +28,12 @@ export const RotatingText = ({
     rotate: { transition: { staggerChildren: stagger } }
   }
 
+  const letterCount = Array.from(text).length
+
   const duration = React.useMemo(() => {
     if (Array.isArray(timing)) return timing
-    else return Array.from({ length: text.length }, () => timing)
-  }, [timing])
+    else return Array.from({ length: letterCount }, () => timing)
+  }, [timing, letterCount])
 
   const wordCopy = prefersReducedMotion
     ? undefined
@@ -59,7 +61,9 @@ export const RotatingText = ({
 
   return (
     <motion.div
-      className={`${styles.container} ${className}`}
+      className={
+        className ? `${styles.container} ${className}` : styles.container
+      }
       variants={hoverArea}
       animate={animate}
       initial='initial'
