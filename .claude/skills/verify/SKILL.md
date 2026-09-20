@@ -41,6 +41,13 @@ landing page links `../dist`.
 - `reducedMotion: 'reduce'` context: no turn, root gets `scale(1.05)`.
 - `hasTouch` context and `page.touchscreen.tap`: a tap starts a flip.
 
+## Performance
+
+For frame cost, React commits and layout shift, use the committed harness in
+`bench/` (see `bench/README.md`): `cd bench && npm ci && npm run bench -- --ref main --ref .`
+measures main and the working copy interleaved and writes `compare.md`. It
+uses the real clock, not the fake one above.
+
 ## Gotchas
 
 - Recompute the element's bounding box before each hover: the harness centres

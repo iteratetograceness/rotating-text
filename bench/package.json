@@ -1,0 +1,14 @@
+{
+  "name": "rotating-text-bench",
+  "private": true,
+  "description": "Performance harness for RotatingText",
+  "type": "module",
+  "scripts": {
+    "bench": "node run.mjs",
+    "compare": "node compare.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "playwright": "1.56.1"
+  }
+}
