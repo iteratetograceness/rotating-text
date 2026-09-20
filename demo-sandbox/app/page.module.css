@@ -84,6 +84,9 @@
      the page's 20px side padding on phones */
   font-size: clamp(40px, calc((100vw - 40px) / 6.2), 144px);
   font-weight: inherit;
+  /* These words never change, so tiles fit them rather than the widest
+     capitals */
+  --rt-widest: none;
 }
 
 .lede {

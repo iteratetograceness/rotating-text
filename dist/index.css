@@ -86,6 +86,16 @@
   visibility: hidden;
 }
 
+/* The widest capitals, in lines with no height, so every tile is as wide as
+   them whatever letter it shows, and new text never resizes the board.
+   --rt-widest can name other letters, or none. */
+._2mmHj::before {
+  content: var(--rt-widest, 'M\AW');
+  display: block;
+  height: 0;
+  overflow: hidden;
+}
+
 /* The letter being flipped away, in a line with no height, so it only
    widens the tile. */
 ._2mmHj[data-was]::after {

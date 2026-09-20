@@ -12,7 +12,7 @@
   from its old letter to its new one; a change mid-flip is picked up as soon
   as the flap lands. Tiles past the end of shorter text flip to blank before
   they go, and new tiles flip in from blank. Every tile is as wide as the
-  widest one, so a letter changing doesn't move its neighbours. Tile colours
+  widest capitals (`M` and `W`), so new text never resizes the board. Tile colours
   and sizes are set with CSS custom properties (see the README).
 
 ### Changes
