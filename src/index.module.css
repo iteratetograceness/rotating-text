@@ -45,9 +45,20 @@
   position: relative;
   display: inline-block;
   user-select: none;
+  /* The tile and its flap are layers that snap to the same pixel, so the
+     top and bottom halves of a letter line up exactly at the seam. */
+  will-change: transform;
   perspective: var(--rt-perspective, 3.5em);
   border-radius: var(--rt-radius, 0.06em);
-  background: var(--rt-seam, #000);
+  /* The seam colour only fills the band behind the gap between the halves,
+     so it can't fringe the tile's outer edges. */
+  background: linear-gradient(
+    to bottom,
+    transparent calc(50% - var(--rt-seam-width, max(1px, 0.012em))),
+    var(--rt-seam, #000) calc(50% - var(--rt-seam-width, max(1px, 0.012em))),
+    var(--rt-seam, #000) calc(50% + var(--rt-seam-width, max(1px, 0.012em))),
+    transparent calc(50% + var(--rt-seam-width, max(1px, 0.012em)))
+  );
   color: var(--rt-ink, inherit);
 }
 
