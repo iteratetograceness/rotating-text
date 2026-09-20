@@ -210,6 +210,35 @@ describe('RotatingText', () => {
     await waitFor(() => expect(flap.style.transform).toBe('rotateX(0deg)'))
   })
 
+  it('marks a tile as turning only while its flap is down', async () => {
+    const { container } = render(
+      <RotatingText text='hi' variant='flap' timing={0.3} stagger={0.01} />
+    )
+    const board = container.firstElementChild!
+    const tiles = Array.from(board.children) as HTMLElement[]
+    expect(tiles.some((tile) => tile.hasAttribute('data-turning'))).toBe(false)
+
+    // Each time a flap moves, whether its tile was marked in the same frame
+    const seen: [number, boolean][] = []
+    tiles.forEach((tile) => {
+      const flap = tile.lastElementChild as HTMLElement
+      watch(flap, () =>
+        seen.push([angle(flap), tile.hasAttribute('data-turning')])
+      )
+    })
+    fireEvent.pointerEnter(board)
+    await waitFor(() => {
+      expect(seen.some(([deg]) => deg < -90)).toBe(true)
+      expect(
+        tiles.map(
+          (tile) => (tile.lastElementChild as HTMLElement).style.transform
+        )
+      ).toEqual(['rotateX(0deg)', 'rotateX(0deg)'])
+    })
+    for (const [deg, turning] of seen) expect(turning).toBe(deg !== 0)
+    expect(tiles.some((tile) => tile.hasAttribute('data-turning'))).toBe(false)
+  })
+
   it('lands every flap on the newest text when it changes mid-flip', async () => {
     const props = { variant: 'flap', timing: 0.1, stagger: 0.01 } as const
     const { container, rerender } = render(
