@@ -4,11 +4,17 @@ name: Publish
 # npm token needed) and creates a GitHub release with the matching CHANGELOG.md
 # section as its notes. Start it either by pushing a tag like v1.0.5, or with
 # "Run workflow" on main, which creates the v<version> tag with the release.
+# A manual run publishes the tip of main unless you give it an earlier commit.
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit on main to publish (leave empty for the tip of main)
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -19,6 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -42,6 +51,10 @@ jobs:
               echo "Run this workflow on main, not $GITHUB_REF_NAME"
               exit 1
             fi
+            if ! git merge-base --is-ancestor HEAD origin/main; then
+              echo "$(git rev-parse HEAD) is not on main"
+              exit 1
+            fi
             if [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
               echo "$TAG already exists. Bump the version in package.json first."
               exit 1
@@ -49,6 +62,7 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       # Installing runs `prepare`, which rebuilds dist. Under yarn the rebuild
       # is byte-for-byte what is committed, source maps included.
@@ -77,4 +91,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         # Creates the tag at this commit if it does not exist yet.
-        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+        run: gh release create "$TAG" --target "$SHA" --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
