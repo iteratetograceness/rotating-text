@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { renderToString } from 'react-dom/server'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RotatingText } from '.'
@@ -51,6 +52,20 @@ describe('RotatingText', () => {
         (span) => span.textContent
       )
       expect(letters).toEqual(['h', 'e', 'l', 'l', 'o'])
+    }
+  })
+
+  it('draws the letters at rest in server-rendered markup', () => {
+    const host = document.createElement('div')
+    host.innerHTML = renderToString(<RotatingText text='hi' />)
+    const [front, back] = Array.from(host.firstElementChild!.children)
+    for (const letter of Array.from(front.querySelectorAll('span'))) {
+      expect(angle(letter)).toBe(0)
+      expect(letter.style.opacity).toBe('1')
+    }
+    for (const letter of Array.from(back.querySelectorAll('span'))) {
+      expect(angle(letter)).toBe(90)
+      expect(letter.style.opacity).toBe('0')
     }
   })
 

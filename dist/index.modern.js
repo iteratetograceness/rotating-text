@@ -8529,38 +8529,6 @@ const featureBundle = {
  */
 const motion = /*@__PURE__*/ createMotionProxy((Component, config) => createDomMotionConfig(Component, config, featureBundle, createDomVisualElement, HTMLProjectionNode));
 
-/**
- * Creates a `MotionValue` to track the state and velocity of a value.
- *
- * Usually, these are created automatically. For advanced use-cases, like use with `useTransform`, you can create `MotionValue`s externally and pass them into the animated component via the `style` prop.
- *
- * ```jsx
- * export const MyComponent = () => {
- *   const scale = useMotionValue(1)
- *
- *   return <motion.div style={{ scale }} />
- * }
- * ```
- *
- * @param initial - The initial state.
- *
- * @public
- */
-function useMotionValue(initial) {
-    const value = useConstant(() => motionValue(initial));
-    /**
-     * If this motion value is being used in static mode, like on
-     * the Framer canvas, force components to rerender when the motion
-     * value is updated.
-     */
-    const { isStatic } = useContext(MotionConfigContext);
-    if (isStatic) {
-        const [, setLatest] = useState(initial);
-        useEffect(() => value.on("change", setLatest), []);
-    }
-    return value;
-}
-
 const isCustomValueType = (v) => {
     return typeof v === "object" && v.mix;
 };
@@ -8577,58 +8545,6 @@ function transform(...args) {
         ...options,
     });
     return useImmediate ? interpolator(inputValue) : interpolator;
-}
-
-function useCombineMotionValues(values, combineValues) {
-    /**
-     * Initialise the returned motion value. This remains the same between renders.
-     */
-    const value = useMotionValue(combineValues());
-    /**
-     * Create a function that will update the template motion value with the latest values.
-     * This is pre-bound so whenever a motion value updates it can schedule its
-     * execution in Framesync. If it's already been scheduled it won't be fired twice
-     * in a single frame.
-     */
-    const updateValue = () => value.set(combineValues());
-    /**
-     * Synchronously update the motion value with the latest values during the render.
-     * This ensures that within a React render, the styles applied to the DOM are up-to-date.
-     */
-    updateValue();
-    /**
-     * Subscribe to all motion values found within the template. Whenever any of them change,
-     * schedule an update.
-     */
-    useIsomorphicLayoutEffect(() => {
-        const scheduleUpdate = () => sync.update(updateValue, false, true);
-        const subscriptions = values.map((v) => v.on("change", scheduleUpdate));
-        return () => {
-            subscriptions.forEach((unsubscribe) => unsubscribe());
-            cancelSync.update(updateValue);
-        };
-    });
-    return value;
-}
-
-function useTransform(input, inputRangeOrTransformer, outputRange, options) {
-    const transformer = typeof inputRangeOrTransformer === "function"
-        ? inputRangeOrTransformer
-        : transform(inputRangeOrTransformer, outputRange, options);
-    return Array.isArray(input)
-        ? useListTransform(input, transformer)
-        : useListTransform([input], ([latest]) => transformer(latest));
-}
-function useListTransform(values, transformer) {
-    const latest = useConstant(() => []);
-    return useCombineMotionValues(values, () => {
-        latest.length = 0;
-        const numValues = values.length;
-        for (let i = 0; i < numValues; i++) {
-            latest[i] = values[i].get();
-        }
-        return transformer(latest);
-    });
 }
 
 /**
@@ -8690,9 +8606,8 @@ var rollSpring = function rollSpring(seconds) {
     restSpeed: frequency * ROLL_REST
   };
 };
-var rollTransform = function rollTransform(_ref) {
-  var rotateX = _ref.rotateX;
-  return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + ") translateZ(var(--rt-depth))";
+var rollTransform = function rollTransform(rotateX) {
+  return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + "deg) translateZ(var(--rt-depth))";
 };
 var ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85];
 var ROLL_SHADE = [0, 0.75, 1, 0.75, 0];
@@ -8750,16 +8665,16 @@ var lit = function lit(facing) {
 var shade = function shade(facing) {
   return Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)));
 };
-var RotatingText = function RotatingText(_ref2) {
-  var text = _ref2.text,
-    _ref2$timing = _ref2.timing,
-    timing = _ref2$timing === void 0 ? 0.5 : _ref2$timing,
-    _ref2$stagger = _ref2.stagger,
-    stagger = _ref2$stagger === void 0 ? 0.1 : _ref2$stagger,
-    _ref2$variant = _ref2.variant,
-    variant = _ref2$variant === void 0 ? 'roll' : _ref2$variant,
-    className = _ref2.className,
-    style = _ref2.style;
+var RotatingText = function RotatingText(_ref) {
+  var text = _ref.text,
+    _ref$timing = _ref.timing,
+    timing = _ref$timing === void 0 ? 0.5 : _ref$timing,
+    _ref$stagger = _ref.stagger,
+    stagger = _ref$stagger === void 0 ? 0.1 : _ref$stagger,
+    _ref$variant = _ref.variant,
+    variant = _ref$variant === void 0 ? 'roll' : _ref$variant,
+    className = _ref.className,
+    style = _ref.style;
   var prefersReducedMotion = useReducedMotion();
   var still = !!prefersReducedMotion;
   var startRoll = useRef();
@@ -8798,9 +8713,6 @@ var RotatingText = function RotatingText(_ref2) {
     startRef: startRoll
   }));
 };
-var motionStyle = function motionStyle(style) {
-  return style;
-};
 var splitLetters = function splitLetters(text) {
   var Segmenter = Intl.Segmenter;
   return Segmenter ? Array.from(new Segmenter().segment(text), function (part) {
@@ -8810,12 +8722,12 @@ var splitLetters = function splitLetters(text) {
 var createAngle = function createAngle() {
   return motionValue(0);
 };
-var RollFaces = function RollFaces(_ref3) {
-  var letters = _ref3.letters,
-    duration = _ref3.duration,
-    stagger = _ref3.stagger,
-    still = _ref3.still,
-    startRef = _ref3.startRef;
+var RollFaces = function RollFaces(_ref2) {
+  var letters = _ref2.letters,
+    duration = _ref2.duration,
+    stagger = _ref2.stagger,
+    still = _ref2.still,
+    startRef = _ref2.startRef;
   var angles = useRef([]).current;
   while (angles.length < letters.length) angles.push(createAngle());
   useIsomorphicLayoutEffect(function () {
@@ -8950,8 +8862,8 @@ var useEasedWidth = function useEasedWidth(word, seconds, still) {
   useEffect(function () {
     var el = placeholder.current;
     var Observer = window.ResizeObserver;
-    var resized = Observer && new Observer(function (_ref4) {
-      var entry = _ref4[0];
+    var resized = Observer && new Observer(function (_ref3) {
+      var entry = _ref3[0];
       if (eased.isAnimating()) return;
       natural.current = el.getClientRects().length ? entry.contentRect.width : NaN;
     });
@@ -8966,29 +8878,37 @@ var useEasedWidth = function useEasedWidth(word, seconds, still) {
     back: back
   };
 };
-var RollLetter = memo(function RollLetter(_ref5) {
-  var _char3 = _ref5["char"],
-    angle = _ref5.angle,
-    offset = _ref5.offset;
-  var rotateX = useTransform(angle, function (a) {
-    return a + offset;
-  });
-  var opacity = useTransform(rotateX, ROLL_SHADE_ANGLES, ROLL_SHADE);
-  return createElement(motion.span, {
+var rollShade = transform(ROLL_SHADE_ANGLES, ROLL_SHADE);
+var RollLetter = memo(function RollLetter(_ref4) {
+  var _char3 = _ref4["char"],
+    angle = _ref4.angle,
+    offset = _ref4.offset;
+  var face = useRef(null);
+  useIsomorphicLayoutEffect(function () {
+    var follow = function follow(a) {
+      var el = face.current;
+      if (!el) return;
+      el.style.transform = rollTransform(a + offset);
+      el.style.opacity = String(rollShade(a + offset));
+    };
+    if (angle.get() !== 0) follow(angle.get());
+    return angle.on('change', follow);
+  }, [angle, offset]);
+  return createElement("span", {
     className: styles.face,
-    style: motionStyle({
-      rotateX: rotateX,
-      opacity: opacity
-    }),
-    transformTemplate: rollTransform
+    ref: face,
+    style: {
+      transform: rollTransform(offset),
+      opacity: rollShade(offset)
+    }
   }, _char3);
 });
-var FlapBoard = function FlapBoard(_ref6) {
-  var letters = _ref6.letters,
-    duration = _ref6.duration,
-    stagger = _ref6.stagger,
-    shuffles = _ref6.shuffles,
-    still = _ref6.still;
+var FlapBoard = function FlapBoard(_ref5) {
+  var letters = _ref5.letters,
+    duration = _ref5.duration,
+    stagger = _ref5.stagger,
+    shuffles = _ref5.shuffles,
+    still = _ref5.still;
   var _React$useState3 = useState(letters.length),
     slots = _React$useState3[0],
     setSlots = _React$useState3[1];
@@ -9032,15 +8952,15 @@ var FlapBoard = function FlapBoard(_ref6) {
     });
   }));
 };
-var FlapTile = function FlapTile(_ref7) {
-  var _char4 = _ref7["char"],
-    duration = _ref7.duration,
-    delay = _ref7.delay,
-    shuffles = _ref7.shuffles,
-    still = _ref7.still,
-    enter = _ref7.enter,
-    index = _ref7.index,
-    onBlank = _ref7.onBlank;
+var FlapTile = function FlapTile(_ref6) {
+  var _char4 = _ref6["char"],
+    duration = _ref6.duration,
+    delay = _ref6.delay,
+    shuffles = _ref6.shuffles,
+    still = _ref6.still,
+    enter = _ref6.enter,
+    index = _ref6.index,
+    onBlank = _ref6.onBlank;
   var _React$useState5 = useState(function () {
       var first = enter ? ' ' : _char4;
       return {

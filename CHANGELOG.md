@@ -36,6 +36,11 @@
   overlapping copies. The hover scale is unchanged.
 - The duplicate copies of each letter are hidden from screen readers and
   left out of text selection, so copying the text gives it once.
+- Rolling letters are plain elements that follow their angle directly
+  instead of motion components, so a turn costs no React work per frame and
+  changing `text` re-renders only the letters that changed. Changing 32
+  letters now takes about a third of the React time and two thirds of the
+  main-thread time it did. The motion is unchanged.
 - Text is split into the characters a reader sees, so an accented letter or
   an emoji with a skin tone stays in one piece.
 - When `text` changes on the roll, its width eases from the old word's to the

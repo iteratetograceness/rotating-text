@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { animate, spring, useReducedMotion } from 'framer-motion'
 import { RotatingText } from '.'
 
-// Replace motion.div/motion.span with plain elements that remember the
-// motion props they were given, so tests can inspect variants directly.
+// Replace motion.div with a plain element that remembers the
+// motion props it was given, so tests can inspect variants directly.
 const { propsOf } = vi.hoisted(() => {
   const props = new WeakMap<Element, Record<string, any>>()
   return { propsOf: props }
@@ -13,7 +13,7 @@ const { propsOf } = vi.hoisted(() => {
 
 vi.mock('framer-motion', async (importOriginal) => {
   const actual = await importOriginal<typeof import('framer-motion')>()
-  const stub = (Tag: 'div' | 'span') =>
+  const stub = (Tag: 'div') =>
     function MotionStub({
       variants,
       custom,
@@ -21,7 +21,6 @@ vi.mock('framer-motion', async (importOriginal) => {
       initial,
       whileHover,
       onHoverStart,
-      transformTemplate,
       style,
       ...rest
     }: Record<string, any>) {
@@ -42,7 +41,7 @@ vi.mock('framer-motion', async (importOriginal) => {
     }
   return {
     ...actual,
-    motion: { div: stub('div'), span: stub('span') },
+    motion: { div: stub('div') },
     useReducedMotion: vi.fn(() => false),
     // Records every call. A rolling letter's turn (on its angle) runs; a
     // flap's (from a plain number) is held, so tests step it by calling its
@@ -82,12 +81,6 @@ const placeholder = (container: HTMLElement) =>
 const root = (container: HTMLElement) => container.firstElementChild!
 const letters = (container: HTMLElement) =>
   Array.from(container.querySelectorAll('span'))
-const rotation = (span: Element) => {
-  const { variants, custom } = propsOf.get(span)!
-  return typeof variants?.rotate === 'function'
-    ? variants.rotate(custom)
-    : variants?.rotate
-}
 // Elements that animate when the component flips
 const movers = (container: HTMLElement) =>
   Array.from(container.querySelectorAll('span')).filter(

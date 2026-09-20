@@ -2,11 +2,11 @@ import * as React from 'react'
 import {
   animate as animateValue,
   clamp,
+  transform as interpolate,
   motion,
   motionValue,
   useIsomorphicLayoutEffect,
-  useReducedMotion,
-  useTransform
+  useReducedMotion
 } from 'framer-motion'
 import styles from './index.module.css'
 
@@ -49,8 +49,8 @@ const rollSpring = (seconds: number) => {
 // true size rather than magnified.
 // The letters keep this 3D transform at rest too, so their text rendering
 // doesn't shift when a flip starts or ends.
-const rollTransform = ({ rotateX }: { rotateX?: string | number }) =>
-  `perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(${rotateX}) translateZ(var(--rt-depth))`
+const rollTransform = (rotateX: number) =>
+  `perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(${rotateX}deg) translateZ(var(--rt-depth))`
 const ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85]
 const ROLL_SHADE = [0, 0.75, 1, 0.75, 0]
 
@@ -184,13 +184,6 @@ export const RotatingText = ({
     </motion.div>
   )
 }
-
-type MotionStyle = React.ComponentProps<typeof motion.span>['style']
-
-// framer-motion's style type loses its CSS properties under the TypeScript
-// version this package builds with, so styles holding motion values go
-// through here.
-const motionStyle = (style: object) => style as MotionStyle
 
 // Split into the characters a reader sees, so an accented letter or an emoji
 // with a skin tone stays in one piece.
@@ -397,24 +390,43 @@ interface RollLetterProps {
   offset: number
 }
 
+// A face dims as it turns away from the viewer, as if lit from the front,
+// and is gone by the time it is edge on.
+const rollShade = interpolate(ROLL_SHADE_ANGLES, ROLL_SHADE)
+
+// A plain span that follows its angle by writing its own style, so a turning
+// letter costs no React work per frame and a text change re-renders only the
+// letters whose character changed.
 const RollLetter = React.memo(function RollLetter({
   char,
   angle,
   offset
 }: RollLetterProps) {
-  const rotateX = useTransform(angle, (a) => a + offset)
-  // A face dims as it turns away from the viewer, as if lit from the front,
-  // and is gone by the time it is edge on.
-  const opacity = useTransform(rotateX, ROLL_SHADE_ANGLES, ROLL_SHADE)
+  const face = React.useRef<HTMLSpanElement>(null)
 
+  useIsomorphicLayoutEffect(() => {
+    const follow = (a: number) => {
+      const el = face.current
+      if (!el) return
+      el.style.transform = rollTransform(a + offset)
+      el.style.opacity = String(rollShade(a + offset))
+    }
+    // The markup already draws the face at rest
+    if (angle.get() !== 0) follow(angle.get())
+    return angle.on('change', follow)
+  }, [angle, offset])
+
+  // At rest in the markup, so a server render has the face in place before
+  // the effect takes over. React compares this with the last render's style,
+  // not the page, and it never changes, so React leaves the turning face be.
   return (
-    <motion.span
+    <span
       className={styles.face}
-      style={motionStyle({ rotateX, opacity })}
-      transformTemplate={rollTransform}
+      ref={face}
+      style={{ transform: rollTransform(offset), opacity: rollShade(offset) }}
     >
       {char}
-    </motion.span>
+    </span>
   )
 })
 
