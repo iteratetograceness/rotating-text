@@ -50,6 +50,8 @@ function MyApp() {
 | `className` | `string`              | `undefined` | Class name added to the outer container.                                  |
 | `style`     | `React.CSSProperties` | `undefined` | Inline styles applied to the outer container.                             |
 
+When `text` changes on the roll, its width eases to the new word's over the first letter's `timing`, so text beside it glides along instead of jumping. With reduced motion on it changes at once.
+
 ### Split-flap tiles
 
 `variant="flap"` draws every letter on its own tile, split by a seam. On hover or tap the top half of each tile falls over the seam and bounces to rest, like a departures board. When `text` changes, each tile flips from its old letter to its new one, so a board can count, cycle words or follow typing; tiles added or removed flip in from blank or out to blank. A space becomes a blank tile, so padding the text to one length (`word.padEnd(6)`) keeps a board the same number of tiles, like a real one. With reduced motion on, letters change in place without flipping.

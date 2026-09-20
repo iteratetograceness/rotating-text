@@ -8699,6 +8699,21 @@ var rollTransform = function rollTransform(_ref) {
 };
 var ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85];
 var ROLL_SHADE = [0, 0.75, 1, 0.75, 0];
+var WIDTH_REST = 0.1;
+var widthSpring = function widthSpring(seconds, distance, velocity) {
+  var frequency = 7.5 / seconds;
+  var stiffness = Math.pow(frequency, 2);
+  var fastest = frequency * Math.abs(distance);
+  var toward = velocity * Math.sign(distance);
+  return {
+    type: 'spring',
+    stiffness: stiffness,
+    damping: 2 * Math.sqrt(stiffness),
+    mass: 1,
+    velocity: toward > fastest ? fastest * Math.sign(distance) : velocity,
+    restDelta: WIDTH_REST
+  };
+};
 var PUSH = 0.25;
 var GRAVITY = 2 * (1 - PUSH);
 var IMPACT = PUSH + GRAVITY;
@@ -8782,6 +8797,7 @@ var RotatingText = function RotatingText(_ref2) {
     letters: letters,
     duration: duration,
     stagger: stagger,
+    still: still,
     startRef: startRoll
   }));
 };
@@ -8801,6 +8817,7 @@ var RollFaces = function RollFaces(_ref3) {
   var letters = _ref3.letters,
     duration = _ref3.duration,
     stagger = _ref3.stagger,
+    still = _ref3.still,
     startRef = _ref3.startRef;
   var angles = React.useRef([]).current;
   while (angles.length < letters.length) angles.push(createAngle());
@@ -8826,6 +8843,8 @@ var RollFaces = function RollFaces(_ref3) {
       });
     };
   });
+  var word = letters.join('');
+  var width = useEasedWidth(word, duration(0), still);
   React.useEffect(function () {
     return function () {
       startRef.current = undefined;
@@ -8835,7 +8854,8 @@ var RollFaces = function RollFaces(_ref3) {
     };
   }, []);
   return React.createElement(React.Fragment, null, React.createElement("div", {
-    className: styles.front
+    className: styles.front,
+    ref: width.front
   }, letters.map(function (_char, i) {
     return React.createElement(RollLetter, {
       key: i,
@@ -8845,7 +8865,8 @@ var RollFaces = function RollFaces(_ref3) {
     });
   })), React.createElement("div", {
     className: styles.back + " " + styles.copy,
-    "aria-hidden": 'true'
+    "aria-hidden": 'true',
+    ref: width.back
   }, letters.map(function (_char2, i) {
     return React.createElement(RollLetter, {
       key: i,
@@ -8854,13 +8875,104 @@ var RollFaces = function RollFaces(_ref3) {
       offset: 90
     });
   })), React.createElement("div", {
-    className: styles.placeholder
-  }, letters.join('')));
+    className: styles.placeholder,
+    ref: width.placeholder
+  }, word));
 };
-var RollLetter = React.memo(function RollLetter(_ref4) {
-  var _char3 = _ref4["char"],
-    angle = _ref4.angle,
-    offset = _ref4.offset;
+var useEasedWidth = function useEasedWidth(word, seconds, still) {
+  var placeholder = React.useRef(null);
+  var front = React.useRef(null);
+  var back = React.useRef(null);
+  var _React$useState2 = React.useState(function () {
+      return motionValue(0);
+    }),
+    eased = _React$useState2[0];
+  var natural = React.useRef(NaN);
+  var heading = React.useRef({
+    to: 0,
+    rtl: false,
+    reach: 0
+  });
+  var paint = function paint(px) {
+    if (!placeholder.current || !front.current || !back.current) return;
+    placeholder.current.style.width = px + "px";
+    var _heading$current = heading.current,
+      to = _heading$current.to,
+      rtl = _heading$current.rtl,
+      reach = _heading$current.reach;
+    var left = Math.max(0, to - px);
+    var cut = left < reach ? 2 * left - reach : left;
+    var clip = rtl ? "inset(-1000px -1000px -1000px " + cut + "px)" : "inset(-1000px " + cut + "px -1000px -1000px)";
+    front.current.style.clipPath = clip;
+    back.current.style.clipPath = clip;
+  };
+  var release = function release() {
+    for (var _i = 0, _arr = [placeholder.current, front.current, back.current]; _i < _arr.length; _i++) {
+      var el = _arr[_i];
+      if (el) el.style.width = el.style.whiteSpace = el.style.clipPath = '';
+    }
+  };
+  useIsomorphicLayoutEffect(function () {
+    if (still || !(seconds > 0)) {
+      eased.stop();
+      release();
+      return;
+    }
+    var el = placeholder.current;
+    var from = eased.isAnimating() ? eased.get() : natural.current;
+    el.style.width = '';
+    var to = parseFloat(getComputedStyle(el).width);
+    natural.current = to;
+    if (!(Math.abs(to - from) >= WIDTH_REST)) {
+      eased.stop();
+      release();
+      return;
+    }
+    var _getComputedStyle = getComputedStyle(el),
+      direction = _getComputedStyle.direction,
+      fontSize = _getComputedStyle.fontSize;
+    heading.current = {
+      to: to,
+      rtl: direction === 'rtl',
+      reach: parseFloat(fontSize) / 4 || 0
+    };
+    el.style.whiteSpace = 'nowrap';
+    var velocity = eased.isAnimating() ? eased.getVelocity() : 0;
+    if (!eased.isAnimating()) eased.jump(from);
+    paint(eased.get());
+    animate$1(eased, to, _extends({}, widthSpring(seconds, to - eased.get(), velocity), {
+      onUpdate: paint,
+      onComplete: release
+    }));
+  }, [word, still]);
+  useIsomorphicLayoutEffect(function () {
+    return function () {
+      return eased.stop();
+    };
+  }, []);
+  React.useEffect(function () {
+    var el = placeholder.current;
+    var Observer = window.ResizeObserver;
+    var resized = Observer && new Observer(function (_ref4) {
+      var entry = _ref4[0];
+      if (eased.isAnimating()) return;
+      natural.current = el.getClientRects().length ? entry.contentRect.width : NaN;
+    });
+    if (resized) resized.observe(el);
+    return function () {
+      if (resized) resized.disconnect();
+    };
+  }, []);
+  return {
+    placeholder: placeholder,
+    front: front,
+    back: back
+  };
+};
+var RollLetter = React.memo(function RollLetter(_ref5) {
+  var _char3 = _ref5["char"],
+    angle = _ref5.angle,
+    offset = _ref5.offset;
   var rotateX = useTransform(angle, function (a) {
     return a + offset;
   });
@@ -8874,20 +8986,20 @@ var RollLetter = React.memo(function RollLetter(_ref4) {
     transformTemplate: rollTransform
   }, _char3);
 });
-var FlapBoard = function FlapBoard(_ref5) {
-  var letters = _ref5.letters,
-    duration = _ref5.duration,
-    stagger = _ref5.stagger,
-    shuffles = _ref5.shuffles,
-    still = _ref5.still;
-  var _React$useState2 = React.useState(letters.length),
-    slots = _React$useState2[0],
-    setSlots = _React$useState2[1];
+var FlapBoard = function FlapBoard(_ref6) {
+  var letters = _ref6.letters,
+    duration = _ref6.duration,
+    stagger = _ref6.stagger,
+    shuffles = _ref6.shuffles,
+    still = _ref6.still;
+  var _React$useState3 = React.useState(letters.length),
+    slots = _React$useState3[0],
+    setSlots = _React$useState3[1];
   var count = still ? letters.length : Math.max(slots, letters.length);
-  var _React$useState3 = React.useState(function () {
+  var _React$useState4 = React.useState(function () {
       return new Set();
     }),
-    gone = _React$useState3[0];
+    gone = _React$useState4[0];
   var length = React.useRef(letters.length);
   useIsomorphicLayoutEffect(function () {
     length.current = letters.length;
@@ -8923,16 +9035,16 @@ var FlapBoard = function FlapBoard(_ref5) {
     });
   }));
 };
-var FlapTile = function FlapTile(_ref6) {
-  var _char4 = _ref6["char"],
-    duration = _ref6.duration,
-    delay = _ref6.delay,
-    shuffles = _ref6.shuffles,
-    still = _ref6.still,
-    enter = _ref6.enter,
-    index = _ref6.index,
-    onBlank = _ref6.onBlank;
-  var _React$useState4 = React.useState(function () {
+var FlapTile = function FlapTile(_ref7) {
+  var _char4 = _ref7["char"],
+    duration = _ref7.duration,
+    delay = _ref7.delay,
+    shuffles = _ref7.shuffles,
+    still = _ref7.still,
+    enter = _ref7.enter,
+    index = _ref7.index,
+    onBlank = _ref7.onBlank;
+  var _React$useState5 = React.useState(function () {
       var first = enter ? ' ' : _char4;
       return {
         from: first,
@@ -8942,8 +9054,8 @@ var FlapTile = function FlapTile(_ref6) {
         settled: 0
       };
     }),
-    faces = _React$useState4[0],
-    setFaces = _React$useState4[1];
+    faces = _React$useState5[0],
+    setFaces = _React$useState5[1];
   var shown = React.useRef(faces.to);
   var wanted = React.useRef(_char4);
   var busy = React.useRef(false);
