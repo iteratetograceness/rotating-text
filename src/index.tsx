@@ -1,7 +1,10 @@
 import * as React from 'react'
 import {
+  animate as animateValue,
   motion,
+  motionValue,
   useAnimationControls,
+  useIsomorphicLayoutEffect,
   useMotionValue,
   useReducedMotion,
   useTransform
@@ -17,17 +20,31 @@ interface Props {
   style?: React.CSSProperties // Pass custom style
 }
 
-// Roll: the letter turns like a face of a cube, overshoots a few degrees and
-// settles back, as if caught by a detent. Both faces share these keyframe
-// times so they stay joined at the edge the whole way round.
-const ROLL_TIMES = [0, 0.64, 0.84, 1]
-const ROLL_EASE = [
-  [0.45, 0, 0.25, 1],
-  [0.4, 0, 0.6, 1],
-  [0.4, 0, 0.6, 1]
-]
-const ROLL_IN = [90, -7, 2, 0]
-const ROLL_OUT = ROLL_IN.map((angle) => angle - 90)
+// Roll: the letter turns like a face of a cube, driven by a damped spring. It
+// leaves at once, overshoots about 6 degrees as if past a detent, and comes
+// to rest at the end of its timing. The copy on the next face is joined to it
+// at a fixed 90 degrees, so the two can never drift apart.
+const ROLL_DAMPING = 0.65
+// Degrees from rest, and the matching speed, at which a letter is settled
+const ROLL_REST = 0.5
+const rollSpring = (seconds: number) => {
+  // A letter given no time still turns, too fast to see
+  const time = seconds > 0 ? seconds : 0.01
+  // How fast the swing dies away so it is inside ROLL_REST after `time`
+  const decay =
+    Math.log(90 / ROLL_REST / Math.sqrt(1 - ROLL_DAMPING ** 2)) / time
+  const frequency = decay / ROLL_DAMPING
+  return {
+    type: 'spring' as const,
+    stiffness: frequency ** 2,
+    damping: 2 * decay,
+    mass: 1,
+    // Each turn starts from rest
+    velocity: 0,
+    restDelta: ROLL_REST,
+    restSpeed: frequency * ROLL_REST
+  }
+}
 // The turn is about an axis set back behind the letter by --rt-depth. The
 // perspective sits outside that offset, so a letter at rest is drawn at its
 // true size rather than magnified.
@@ -62,6 +79,7 @@ export const RotatingText = ({
   const still = !!prefersReducedMotion
   const animate = useAnimationControls()
   const busyUntil = React.useRef(0)
+  const startRoll = React.useRef<() => void>()
 
   // Letters past the end of a timing array reuse its last entry
   const duration = (i: number) =>
@@ -71,15 +89,21 @@ export const RotatingText = ({
   const transitionFor = (i: number) => ({
     duration: duration(i),
     delay: i * stagger,
-    times: variant === 'flap' ? FLAP_TIMES : ROLL_TIMES,
-    ease: variant === 'flap' ? FLAP_EASE : ROLL_EASE
+    times: FLAP_TIMES,
+    ease: FLAP_EASE
   })
 
   // A second hover while letters are still moving is ignored, so a flip
-  // always runs to the end instead of snapping back to the start.
+  // always runs to the end instead of snapping back to the start. Rolling
+  // letters know when they have settled, so roll asks them.
   const flip = () => {
+    if (still) return
+    if (variant !== 'flap') {
+      if (startRoll.current) startRoll.current()
+      return
+    }
     const now = performance.now()
-    if (still || now < busyUntil.current) return
+    if (now < busyUntil.current) return
     const longest = Math.max(
       ...letters.map((_, i) => i * stagger + duration(i))
     )
@@ -121,8 +145,9 @@ export const RotatingText = ({
       ) : (
         <RollFaces
           letters={letters}
-          front={still ? undefined : rollVariant(ROLL_OUT, transitionFor)}
-          back={still ? undefined : rollVariant(ROLL_IN, transitionFor)}
+          duration={duration}
+          stagger={stagger}
+          startRef={startRoll}
         />
       )}
     </motion.div>
@@ -149,65 +174,93 @@ const splitLetters = (text: string): string[] => {
     : Array.from(text)
 }
 
-const rollVariant = (
-  angles: number[],
-  transitionFor: (i: number) => object
-): MotionVariants => ({
-  rotate: (i: number) => ({ rotateX: angles, transition: transitionFor(i) })
-})
+// Named through a helper because this TypeScript can't import a type alone
+// without lint calling it unused
+const createAngle = () => motionValue(0)
+type Angle = ReturnType<typeof createAngle>
 
 interface RollProps {
   letters: string[]
-  front?: MotionVariants
-  back?: MotionVariants
+  duration: (i: number) => number
+  stagger: number
+  startRef: React.MutableRefObject<(() => void) | undefined>
 }
 
 // The front letter rolls down and away while its copy rolls in from above.
-const RollFaces = ({ letters, front, back }: RollProps) => (
-  <React.Fragment>
-    <div className={styles.front}>
-      {letters.map((char, i) => (
-        <RollLetter
-          key={`${char}${i}`}
-          char={char}
-          index={i}
-          variants={front}
-          from={0}
-        />
-      ))}
-    </div>
-    <div className={`${styles.back} ${styles.copy}`} aria-hidden='true'>
-      {letters.map((char, i) => (
-        <RollLetter
-          key={`${char}${i}copy`}
-          char={char}
-          index={i}
-          variants={back}
-          from={ROLL_IN[0]}
-        />
-      ))}
-    </div>
-    <div className={styles.placeholder}>{letters.join('')}</div>
-  </React.Fragment>
-)
+const RollFaces = ({ letters, duration, stagger, startRef }: RollProps) => {
+  // One angle per letter, the front face's. They outlive text changes, so a
+  // letter that is turning keeps turning when the text changes under it.
+  const angles = React.useRef<Angle[]>([]).current
+  while (angles.length < letters.length) angles.push(createAngle())
+
+  useIsomorphicLayoutEffect(() => {
+    // Letters that are gone stop turning and their angles are dropped, so a
+    // letter that comes back later starts at rest
+    angles.splice(letters.length).forEach((a) => a.stop())
+
+    // Only the letters on screen turn, not any a render in progress added
+    const turning = angles.slice()
+    startRef.current = () => {
+      // Letters still turning finish first
+      if (turning.some((a) => a.isAnimating())) return
+      turning.forEach((angle, i) =>
+        animateValue(angle, -90, {
+          ...rollSpring(duration(i)),
+          delay: i * stagger,
+          // The copy is showing now. Put the front face back, which looks
+          // the same, so selecting text and the next flip start from there.
+          onComplete: () => angle.jump(0),
+          // A turn cut short, say because the letter was hidden, goes back
+          // to rest rather than staying frozen part way round
+          onStop: () => angle.set(0)
+        })
+      )
+    }
+  })
+
+  React.useEffect(
+    () => () => {
+      startRef.current = undefined
+      angles.forEach((a) => a.stop())
+    },
+    []
+  )
+
+  return (
+    <React.Fragment>
+      <div className={styles.front}>
+        {letters.map((char, i) => (
+          <RollLetter key={i} char={char} angle={angles[i]} offset={0} />
+        ))}
+      </div>
+      <div className={`${styles.back} ${styles.copy}`} aria-hidden='true'>
+        {letters.map((char, i) => (
+          <RollLetter key={i} char={char} angle={angles[i]} offset={90} />
+        ))}
+      </div>
+      <div className={styles.placeholder}>{letters.join('')}</div>
+    </React.Fragment>
+  )
+}
 
 interface RollLetterProps {
   char: string
-  index: number
-  variants?: MotionVariants
-  from: number
+  angle: Angle
+  offset: number
 }
 
-const RollLetter = ({ char, index, variants, from }: RollLetterProps) => {
-  const rotateX = useMotionValue(from)
+const RollLetter = React.memo(function RollLetter({
+  char,
+  angle,
+  offset
+}: RollLetterProps) {
+  const rotateX = useTransform(angle, (a) => a + offset)
   // A face dims as it turns away from the viewer, as if lit from the front,
   // and is gone by the time it is edge on.
   const opacity = useTransform(rotateX, ROLL_SHADE_ANGLES, ROLL_SHADE)
 
   return (
     <motion.span
-      custom={index}
-      variants={variants}
       className={styles.face}
       style={motionStyle({ rotateX, opacity })}
       transformTemplate={rollTransform}
@@ -215,7 +268,7 @@ const RollLetter = ({ char, index, variants, from }: RollLetterProps) => {
       {char}
     </motion.span>
   )
-}
+})
 
 interface FlapProps {
   char: string
