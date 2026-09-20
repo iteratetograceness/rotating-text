@@ -4,7 +4,10 @@
   "description": "3D Rotating Text Component for React",
   "author": "jueungrace",
   "license": "MIT",
-  "repository": "jueungrace/rotating-text",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iteratetograceness/rotating-text.git"
+  },
   "homepage": "https://rotating-text.vercel.app/",
   "main": "dist/index.js",
   "module": "dist/index.modern.js",
