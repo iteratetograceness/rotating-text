@@ -116,7 +116,10 @@ recalculation, layout or paint on the main thread (read from the trace):
   and `count` counts them; `maxMovePx` is the furthest any shifted element
   moved and `neighbourMovePx` how far the text after or below the component was
   pushed; `resizes`, `maxWidthChangePx` and `maxHeightChangePx` track the box
-  holding the component. For flips, `restDriftPx` compares every visible
+  holding the component. For change and flip, an untimed second pass repeats
+  the action and checks every element's layout box (before transforms) on
+  every frame: `frameMovePx` is the furthest any of them moved from where it
+  was, and `frameMovedElements` how many moved. For flips, `restDriftPx` compares every visible
   element's drawn box (transforms included) before the flip and after it
   settles, so a letter or tile that lands a fraction of a pixel off, or a roll
   whose incoming face doesn't land exactly where the outgoing one was, shows
