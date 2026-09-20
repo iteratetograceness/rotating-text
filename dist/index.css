@@ -55,8 +55,8 @@
   -webkit-user-select: none;
      -moz-user-select: none;
           user-select: none;
-  /* The tile and its flap are layers that snap to the same pixel, so the
-     top and bottom halves of a letter line up exactly at the seam. */
+  /* The tile is a layer, so the halves and the turning flap snap to the
+     same pixel and a letter lines up exactly at the seam. */
   will-change: transform;
   perspective: var(--rt-perspective, 3.5em);
   border-radius: var(--rt-radius, 0.06em);
@@ -132,11 +132,20 @@
 ._2OAp6 {
   position: absolute;
   inset: 0;
-  transform-style: preserve-3d;
-  /* Kept on its own layer at rest too, so the seam and letters render the
-     same before, during and after a flip. */
-  will-change: transform;
   border-radius: inherit;
+  /* Where every flip leaves it. This keeps the flap on a layer at rest,
+     which is what keeps the seam and letters rendering the same before,
+     during and after a flip; a flat flap moves the seam's anti-aliasing. */
+  transform: rotateX(0deg);
+}
+
+/* The flap is only a 3D scene while it turns. At rest its back is hidden
+   rather than turned, which saves every idle tile the layer that face
+   needs. The tile keeps its layer and perspective, so nothing moves by a
+   pixel when a turn starts or ends. */
+._1wa55[data-turning] ._2OAp6 {
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 ._3WYvH {
@@ -144,8 +153,17 @@
           backface-visibility: hidden;
 }
 
-/* The back of the flap carries the bottom half, upside down until it lands. */
+/* The back of the flap carries the bottom half, upside down until it lands.
+   At rest it faces away, so it is hidden, and flipped flat rather than
+   turned: a transform of some kind throughout means going 3D needs no new
+   layout. */
 ._1aEQP {
+  visibility: hidden;
+  transform: scaleY(-1);
+}
+
+._1wa55[data-turning] ._1aEQP {
+  visibility: inherit;
   transform: rotateX(180deg);
 }
 

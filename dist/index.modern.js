@@ -9066,6 +9066,7 @@ var FlapTile = function FlapTile(_ref7) {
     seconds.current = duration >= 0 ? duration : 0.5;
     leave.current = onBlank;
   });
+  var tile = useRef(null);
   var flap = useRef(null);
   var frontShade = useRef(null);
   var backShade = useRef(null);
@@ -9074,6 +9075,7 @@ var FlapTile = function FlapTile(_ref7) {
   var paint = function paint(rotateX) {
     if (!flap.current || rotateX === painted.current) return;
     painted.current = rotateX;
+    tile.current.toggleAttribute('data-turning', rotateX !== 0);
     var angle = -rotateX * Math.PI / 180;
     var facing = Math.cos(angle - LIGHT);
     flap.current.style.transform = "rotateX(" + rotateX + "deg)";
@@ -9189,7 +9191,8 @@ var FlapTile = function FlapTile(_ref7) {
   }, []);
   var was = faces.falling && faces.from !== faces.to ? faces.from : undefined;
   return createElement("span", {
-    className: styles.tile
+    className: styles.tile,
+    ref: tile
   }, createElement("span", {
     className: styles.sizer,
     "data-was": was

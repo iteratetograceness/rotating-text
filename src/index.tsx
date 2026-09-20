@@ -529,6 +529,7 @@ const FlapTile = ({
     leave.current = onBlank
   })
 
+  const tile = React.useRef<HTMLSpanElement>(null)
   const flap = React.useRef<HTMLSpanElement>(null)
   const frontShade = React.useRef<HTMLSpanElement>(null)
   const backShade = React.useRef<HTMLSpanElement>(null)
@@ -540,6 +541,9 @@ const FlapTile = ({
   const paint = (rotateX: number) => {
     if (!flap.current || rotateX === painted.current) return
     painted.current = rotateX
+    // The flap is 3D only while it is down, from its first frame off the
+    // top to the one that puts it back up
+    tile.current!.toggleAttribute('data-turning', rotateX !== 0)
     const angle = (-rotateX * Math.PI) / 180
     const facing = Math.cos(angle - LIGHT)
     flap.current.style.transform = `rotateX(${rotateX}deg)`
@@ -668,7 +672,7 @@ const FlapTile = ({
   // by whichever of the two letters is wider
   const was = faces.falling && faces.from !== faces.to ? faces.from : undefined
   return (
-    <span className={styles.tile}>
+    <span className={styles.tile} ref={tile}>
       <span className={styles.sizer} data-was={was}>
         {faces.falling ? faces.to : faces.from}
       </span>
