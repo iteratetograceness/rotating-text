@@ -132,6 +132,15 @@ pre code {
   padding-block: 0.06em 0.08em;
 }
 
+/* The component's own split-flap tiles, in the board's colours */
+.rt-flap {
+  --rt-tile: var(--flap);
+  --rt-seam: var(--seam);
+  --rt-ink: var(--ink);
+  --rt-gap: 0.05em;
+  --rt-radius: 0.05em;
+}
+
 /* Copy buttons and code blocks, shared by every snippet on the page */
 button.copy {
   font: 500 13px/1 var(--mono);

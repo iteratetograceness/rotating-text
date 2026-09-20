@@ -49,6 +49,12 @@ const PROPS = [
     about: "Seconds each letter's animation lasts, or one duration per letter."
   },
   {
+    name: 'variant',
+    type: "'roll' | 'flap'",
+    value: "'roll'",
+    about: 'roll turns each letter over like a cube; flap draws split-flap tiles.'
+  },
+  {
     name: 'className',
     type: 'string',
     value: 'undefined',
@@ -85,8 +91,8 @@ export default function Home() {
           </div>
           <h1 className={styles.heroWords}>
             <span className='sr-only'>Rotating Text</span>
-            <Flip text='Rotating' stagger={0.07} />
-            <Flip text='Text' />
+            <Flip text='ROTATING' stagger={0.07} variant='flap' />
+            <Flip text='TEXT' variant='flap' />
           </h1>
           <p className={styles.lede}>
             A 3D flip-on-hover text component for React, built with Framer
@@ -97,7 +103,7 @@ export default function Home() {
               Every tiled word on this page is the component, running.
             </span>
             <span className={styles.touchHint}>
-              Open on a desktop and hover the name to see it flip.
+              Tap the name to see it flip.
             </span>
           </p>
           <div className={styles.install}>
@@ -169,8 +175,8 @@ export default function Home() {
               and spaces collapse, so use one component per word.
             </li>
             <li>
-              The flip runs on hover, so touch screens see the text standing
-              still.
+              The flip runs when the pointer moves onto the text, which on a
+              touch screen is a tap. A flip always runs to the end.
             </li>
             <li>
               With reduced motion turned on, the flip becomes a gentle scale.
