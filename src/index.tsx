@@ -54,6 +54,33 @@ const rollTransform = (rotateX: number) =>
 const ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85]
 const ROLL_SHADE = [0, 0.75, 1, 0.75, 0]
 
+// When the text changes, the roll's width eases from the old word's to the
+// new one's, so text beside it glides along rather than jumping. The spring
+// is critically damped, so the width comes to rest without overshooting and
+// pushing its neighbours back and forth. By the end of the first letter's
+// timing it has (1 + 7.5) * e^-7.5 of the way left to go, just under 0.5%,
+// and it lets go within a tenth of a pixel of the new width, so the last
+// step can't be seen. A critically damped spring is settled by distance
+// alone; framer ignores a rest speed for it.
+const WIDTH_REST = 0.1 // pixels
+const widthSpring = (seconds: number, distance: number, velocity: number) => {
+  const frequency = 7.5 / seconds
+  const stiffness = frequency ** 2
+  // A change while the width is still easing carries on at the speed it is
+  // going, unless it is heading toward the new width fast enough to pass it
+  const fastest = frequency * Math.abs(distance)
+  const toward = velocity * Math.sign(distance)
+  return {
+    type: 'spring' as const,
+    stiffness,
+    // Written this way so framer takes the critically damped branch exactly
+    damping: 2 * Math.sqrt(stiffness),
+    mass: 1,
+    velocity: toward > fastest ? fastest * Math.sign(distance) : velocity,
+    restDelta: WIDTH_REST
+  }
+}
+
 // Flap: the top half is let go with a small push and falls over the centre
 // hinge, speeding up at a constant rate like anything under gravity. It hits
 // the stop and rebounds, each time with a fraction of the speed it landed
@@ -150,6 +177,7 @@ export const RotatingText = ({
           letters={letters}
           duration={duration}
           stagger={stagger}
+          still={still}
           startRef={startRoll}
         />
       )}
@@ -178,11 +206,18 @@ interface RollProps {
   letters: string[]
   duration: (i: number) => number
   stagger: number
+  still: boolean
   startRef: React.MutableRefObject<(() => void) | undefined>
 }
 
 // The front letter rolls down and away while its copy rolls in from above.
-const RollFaces = ({ letters, duration, stagger, startRef }: RollProps) => {
+const RollFaces = ({
+  letters,
+  duration,
+  stagger,
+  still,
+  startRef
+}: RollProps) => {
   // One angle per letter, the front face's. They outlive text changes, so a
   // letter that is turning keeps turning when the text changes under it.
   const angles = React.useRef<Angle[]>([]).current
@@ -213,6 +248,9 @@ const RollFaces = ({ letters, duration, stagger, startRef }: RollProps) => {
     }
   })
 
+  const word = letters.join('')
+  const width = useEasedWidth(word, duration(0), still)
+
   React.useEffect(
     () => () => {
       startRef.current = undefined
@@ -223,19 +261,127 @@ const RollFaces = ({ letters, duration, stagger, startRef }: RollProps) => {
 
   return (
     <React.Fragment>
-      <div className={styles.front}>
+      <div className={styles.front} ref={width.front}>
         {letters.map((char, i) => (
           <RollLetter key={i} char={char} angle={angles[i]} offset={0} />
         ))}
       </div>
-      <div className={`${styles.back} ${styles.copy}`} aria-hidden='true'>
+      <div
+        className={`${styles.back} ${styles.copy}`}
+        aria-hidden='true'
+        ref={width.back}
+      >
         {letters.map((char, i) => (
           <RollLetter key={i} char={char} angle={angles[i]} offset={90} />
         ))}
       </div>
-      <div className={styles.placeholder}>{letters.join('')}</div>
+      <div className={styles.placeholder} ref={width.placeholder}>
+        {word}
+      </div>
     </React.Fragment>
   )
+}
+
+// The in-flow placeholder sizes the roll. When the word changes it is held at
+// the old word's width and eased to the new one's. At rest none of this is
+// set, so the roll lays out exactly as it always has. Written straight to the
+// DOM, so the easing costs no renders.
+const useEasedWidth = (word: string, seconds: number, still: boolean) => {
+  const placeholder = React.useRef<HTMLDivElement>(null)
+  const front = React.useRef<HTMLDivElement>(null)
+  const back = React.useRef<HTMLDivElement>(null)
+  const [eased] = React.useState(() => motionValue(0))
+  // The placeholder's width at rest, kept current as fonts load or the page
+  // restyles, so a change eases from the width that was really on screen
+  const natural = React.useRef(NaN)
+  // Where the width is heading, whether the letters run right to left, and
+  // a quarter of an em in pixels
+  const heading = React.useRef({ to: 0, rtl: false, reach: 0 })
+
+  const paint = (px: number) => {
+    if (!placeholder.current || !front.current || !back.current) return
+    placeholder.current.style.width = `${px}px`
+    // Letters past the box's edge are cut off, so a longer word is uncovered
+    // as the box widens instead of being drawn over the text beside it. The
+    // cut is measured back from where the letters end at rest. Over the last
+    // quarter of an em it moves out past them by that much again, so a glyph
+    // that reaches past its letter isn't still cut off when the width lets
+    // go, and can't pop into view.
+    const { to, rtl, reach } = heading.current
+    const left = Math.max(0, to - px)
+    const cut = left < reach ? 2 * left - reach : left
+    const clip = rtl
+      ? `inset(-1000px -1000px -1000px ${cut}px)`
+      : `inset(-1000px ${cut}px -1000px -1000px)`
+    front.current.style.clipPath = clip
+    back.current.style.clipPath = clip
+  }
+  const release = () => {
+    for (const el of [placeholder.current, front.current, back.current]) {
+      if (el) el.style.width = el.style.whiteSpace = el.style.clipPath = ''
+    }
+  }
+
+  useIsomorphicLayoutEffect(() => {
+    if (still || !(seconds > 0)) {
+      eased.stop()
+      release()
+      return
+    }
+    const el = placeholder.current!
+    const from = eased.isAnimating() ? eased.get() : natural.current
+    el.style.width = ''
+    // Not a number on the first render or while the roll isn't laid out,
+    // say inside something hidden; then there is nothing to ease between
+    const to = parseFloat(getComputedStyle(el).width)
+    natural.current = to
+    if (!(Math.abs(to - from) >= WIDTH_REST)) {
+      eased.stop()
+      release()
+      return
+    }
+    const { direction, fontSize } = getComputedStyle(el)
+    heading.current = {
+      to,
+      rtl: direction === 'rtl',
+      reach: parseFloat(fontSize) / 4 || 0
+    }
+    // Held narrower than its text, the placeholder must not wrap to a
+    // second line and grow taller
+    el.style.whiteSpace = 'nowrap'
+    const velocity = eased.isAnimating() ? eased.getVelocity() : 0
+    if (!eased.isAnimating()) eased.jump(from)
+    paint(eased.get())
+    animateValue(eased, to, {
+      ...widthSpring(seconds, to - eased.get(), velocity),
+      onUpdate: paint,
+      onComplete: release
+    })
+  }, [word, still])
+
+  // Stopped as the roll is taken down, before its elements are let go
+  useIsomorphicLayoutEffect(() => () => eased.stop(), [])
+
+  React.useEffect(() => {
+    const el = placeholder.current!
+    // Newer than this TypeScript's DOM types, and missing in some test setups
+    const Observer = (window as any).ResizeObserver
+    const resized =
+      Observer &&
+      new Observer(([entry]: { contentRect: DOMRectReadOnly }[]) => {
+        if (eased.isAnimating()) return
+        // Nothing to ease from while the roll is hidden
+        natural.current = el.getClientRects().length
+          ? entry.contentRect.width
+          : NaN
+      })
+    if (resized) resized.observe(el)
+    return () => {
+      if (resized) resized.disconnect()
+    }
+  }, [])
+
+  return { placeholder, front, back }
 }
 
 interface RollLetterProps {
@@ -395,6 +541,7 @@ const FlapTile = ({
     leave.current = onBlank
   })
 
+  const tile = React.useRef<HTMLSpanElement>(null)
   const flap = React.useRef<HTMLSpanElement>(null)
   const frontShade = React.useRef<HTMLSpanElement>(null)
   const backShade = React.useRef<HTMLSpanElement>(null)
@@ -406,6 +553,9 @@ const FlapTile = ({
   const paint = (rotateX: number) => {
     if (!flap.current || rotateX === painted.current) return
     painted.current = rotateX
+    // The flap is 3D only while it is down, from its first frame off the
+    // top to the one that puts it back up
+    tile.current!.toggleAttribute('data-turning', rotateX !== 0)
     const angle = (-rotateX * Math.PI) / 180
     const facing = Math.cos(angle - LIGHT)
     flap.current.style.transform = `rotateX(${rotateX}deg)`
@@ -534,7 +684,7 @@ const FlapTile = ({
   // by whichever of the two letters is wider
   const was = faces.falling && faces.from !== faces.to ? faces.from : undefined
   return (
-    <span className={styles.tile}>
+    <span className={styles.tile} ref={tile}>
       <span className={styles.sizer} data-was={was}>
         {faces.falling ? faces.to : faces.from}
       </span>

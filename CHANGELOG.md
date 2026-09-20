@@ -43,6 +43,11 @@
   main-thread time it did. The motion is unchanged.
 - Text is split into the characters a reader sees, so an accented letter or
   an emoji with a skin tone stays in one piece.
+- When `text` changes on the roll, its width eases from the old word's to the
+  new one's over the first letter's `timing`, so the text beside it glides
+  instead of jumping. A longer word is uncovered as the width grows rather
+  than drawn over its neighbours. With reduced motion on, or a first `timing`
+  of 0, the width changes at once as before.
 
 ## 1.0.5 (2026-09-20)
 

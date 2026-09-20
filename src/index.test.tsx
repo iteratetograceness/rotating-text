@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { renderToString } from 'react-dom/server'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RotatingText } from '.'
 
 // Observers still watching when a test ends are stopped, pass or fail
@@ -9,6 +9,7 @@ const observers: MutationObserver[] = []
 afterEach(() => {
   observers.splice(0).forEach((observer) => observer.disconnect())
   cleanup()
+  vi.restoreAllMocks()
 })
 
 // Calls `record` every time the element's style changes
@@ -17,6 +18,23 @@ const watch = (el: Element, record: () => void) => {
   observer.observe(el, { attributes: true })
   observers.push(observer)
 }
+
+// jsdom does no layout, so the roll's placeholder is given 10px a letter, or
+// the width it is being held at
+const letterWidths = () => {
+  const real = window.getComputedStyle
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+    const style = real.call(window, el, pseudo)
+    if (!String(el.getAttribute('class')).includes('placeholder')) return style
+    const width =
+      (el as HTMLElement).style.width || `${el.textContent!.length * 10}px`
+    return new Proxy(style, {
+      get: (target, key) => (key === 'width' ? width : (target as any)[key])
+    })
+  })
+}
+
+const px = (value: string) => parseFloat(value)
 
 const angle = (el: HTMLElement) =>
   Number(/rotateX\(([-\d.e]+)deg\)/.exec(el.style.transform)![1])
@@ -192,6 +210,94 @@ describe('RotatingText', () => {
     }
   })
 
+  it('eases its width from the old text to the new one', async () => {
+    letterWidths()
+    const { container, rerender } = render(
+      <RotatingText text='hi' timing={0.2} />
+    )
+    const [front, back, placeholder] = Array.from(
+      container.firstElementChild!.children
+    ) as HTMLElement[]
+    expect(placeholder.style.width).toBe('')
+
+    const seen: number[] = []
+    watch(placeholder, () => {
+      if (placeholder.style.width) seen.push(px(placeholder.style.width))
+    })
+    rerender(<RotatingText text='hello' timing={0.2} />)
+
+    // Held at the old width, with the new letters cut off at its edge rather
+    // than drawn over whatever comes after
+    expect(placeholder.style.width).toBe('20px')
+    expect(placeholder.style.whiteSpace).toBe('nowrap')
+    expect(front.style.clipPath).toBe('inset(-1000px 30px -1000px -1000px)')
+    expect(back.style.clipPath).toBe(front.style.clipPath)
+    expect(front.textContent).toBe('hello')
+
+    // Widens steadily without passing the new width, then lets go, so at
+    // rest the roll is laid out as before
+    await waitFor(() => expect(placeholder.style.width).toBe(''))
+    expect(seen.length).toBeGreaterThan(3)
+    seen.forEach((width, i) => {
+      expect(width).toBeGreaterThanOrEqual(i ? seen[i - 1] : 20)
+      expect(width).toBeLessThanOrEqual(50)
+    })
+    expect(Math.max(...seen)).toBeGreaterThan(49)
+    expect(placeholder.style.whiteSpace).toBe('')
+    expect(front.style.clipPath).toBe('')
+    expect(back.style.clipPath).toBe('')
+  })
+
+  it('carries on from the width it has reached when the text changes again', async () => {
+    letterWidths()
+    const { container, rerender } = render(
+      <RotatingText text='hi' timing={0.3} />
+    )
+    const placeholder = container.firstElementChild!.lastElementChild!
+    const width = () => px((placeholder as HTMLElement).style.width)
+    rerender(<RotatingText text='hello' timing={0.3} />)
+    await waitFor(() => expect(width()).toBeGreaterThan(30))
+
+    const reached = width()
+    const seen: number[] = []
+    watch(placeholder, () => seen.push(width()))
+    rerender(<RotatingText text='h' timing={0.3} />)
+    expect(width()).toBe(reached)
+
+    await waitFor(() =>
+      expect((placeholder as HTMLElement).style.width).toBe('')
+    )
+    const eased = seen.filter((w) => !Number.isNaN(w))
+    // No jump back to either word's width, and no swing past the new one
+    expect(eased.length).toBeGreaterThan(3)
+    expect(Math.max(...eased)).toBeLessThan(50)
+    expect(Math.min(...eased)).toBeGreaterThanOrEqual(10)
+    for (let i = 1; i < eased.length; i++)
+      expect(Math.abs(eased[i] - eased[i - 1])).toBeLessThan(15)
+  })
+
+  it('does not carry the width past a new word it was already heading for', async () => {
+    letterWidths()
+    const { container, rerender } = render(
+      <RotatingText text='hi' timing={0.3} />
+    )
+    const placeholder = container.firstElementChild!
+      .lastElementChild as HTMLElement
+    const width = () => px(placeholder.style.width)
+    rerender(<RotatingText text='hello world!' timing={0.3} />)
+    // Moving fast, and short of the width of the word it changes to next
+    await waitFor(() => expect(width()).toBeGreaterThan(30))
+    expect(width()).toBeLessThan(50)
+
+    const seen: number[] = []
+    watch(placeholder, () => seen.push(width()))
+    rerender(<RotatingText text='hello' timing={0.3} />)
+    await waitFor(() => expect(placeholder.style.width).toBe(''))
+    const eased = seen.filter((w) => !Number.isNaN(w))
+    expect(eased.length).toBeGreaterThan(3)
+    expect(Math.max(...eased)).toBeLessThanOrEqual(50)
+  })
+
   it('keeps an accented letter or emoji on one tile', () => {
     const { container } = render(
       <RotatingText text={'Cafe\u0301👍🏽'} variant='flap' />
@@ -223,6 +329,35 @@ describe('RotatingText', () => {
     await waitFor(() => expect(angle()).toBeLessThan(-90), { interval: 5 })
     // Once it settles, it goes back up with the letter on both faces
     await waitFor(() => expect(flap.style.transform).toBe('rotateX(0deg)'))
+  })
+
+  it('marks a tile as turning only while its flap is down', async () => {
+    const { container } = render(
+      <RotatingText text='hi' variant='flap' timing={0.3} stagger={0.01} />
+    )
+    const board = container.firstElementChild!
+    const tiles = Array.from(board.children) as HTMLElement[]
+    expect(tiles.some((tile) => tile.hasAttribute('data-turning'))).toBe(false)
+
+    // Each time a flap moves, whether its tile was marked in the same frame
+    const seen: [number, boolean][] = []
+    tiles.forEach((tile) => {
+      const flap = tile.lastElementChild as HTMLElement
+      watch(flap, () =>
+        seen.push([angle(flap), tile.hasAttribute('data-turning')])
+      )
+    })
+    fireEvent.pointerEnter(board)
+    await waitFor(() => {
+      expect(seen.some(([deg]) => deg < -90)).toBe(true)
+      expect(
+        tiles.map(
+          (tile) => (tile.lastElementChild as HTMLElement).style.transform
+        )
+      ).toEqual(['rotateX(0deg)', 'rotateX(0deg)'])
+    })
+    for (const [deg, turning] of seen) expect(turning).toBe(deg !== 0)
+    expect(tiles.some((tile) => tile.hasAttribute('data-turning'))).toBe(false)
   })
 
   it('lands every flap on the newest text when it changes mid-flip', async () => {

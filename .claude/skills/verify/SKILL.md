@@ -37,6 +37,12 @@ landing page links `../dist`.
 - Change `text` mid-flip (longer, shorter, empty then back): letters keep
   turning, nothing is left frozen part way round, all end at 0 / 90.
 - Leave and re-enter several times mid-flip: no restart, no freeze.
+- Roll text change with text on either side (a flex row, as in `bench/`):
+  log the x of the text after the component every frame. It glides over the
+  first letter's timing (no frame moves more than ~12px at 0.5s for a
+  127px change), a change mid-ease carries on without a jump, and once the
+  width lets go the frame is byte-identical to main's. Also check
+  `dir=rtl` (the clip is on the left) and reduced motion (one-frame jump).
 - `timing` as an array, and `timing=0`.
 - `reducedMotion: 'reduce'` context: no turn, root gets `scale(1.05)`.
 - `hasTouch` context and `page.touchscreen.tap`: a tap starts a flip.
