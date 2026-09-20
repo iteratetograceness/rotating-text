@@ -132,30 +132,34 @@ median, min and max of every metric for each length and scenario),
 
 ## Noise
 
-Measured on a 4-core cloud VM with the defaults (6 runs, 4x CPU slowdown),
-running commit e83fa39 twice as separate passes, and once against itself
-interleaved in one run:
+Measured on a 4-core cloud VM with the defaults (6 runs, 4x CPU slowdown).
+"Separate runs" is the same commit measured in two runs at different times
+(e83fa39 and 05c9184, each twice); "interleaved" is one commit measured twice
+within one run. Each cell gives the median and worst change across the 24
+length and scenario cells of both variants.
 
-| Metric | Separate passes: median / worst change | Interleaved: median / worst change |
+| Metric | Separate runs | Interleaved |
 |---|--:|--:|
-| Commits, renders, layout count, layout shift | identical | identical |
-| React ms | 6% / 17% | 4% / 12% |
-| Transition ms | 2% / 11% | 1% / 7% |
-| Main-thread busy ms | 6% / 13% | 2% / 7% |
-| Raster ms | 5% / 18% | 5% / 19% |
-| Style recalc ms | 9% / 31% | 5% / 50% |
-| p95 frame interval, main ms/frame p95 | 1–4% / 34% | 1–4% / 84% |
-| Paint and layerize ms | 7–11% / 112% | 7% / 92% |
+| Renders, layout shift, neighbour and frame move px | identical | identical |
+| Commits, layout count | identical, except flap on 05c9184 (up to 29%) | identical |
+| React ms | 4–8% / 34% | 4% / 12% |
+| Transition ms | 0–5% / 21% | 1% / 7% |
+| Main-thread busy ms | 4–5% / 28% | 2% / 7% |
+| Raster ms | 5–8% / 51% | 5% / 19% |
+| Style recalc ms | 3–7% / 86% | 5% / 50% |
+| Main ms/frame p95 | 5–8% / 60% | 4% / 82% |
+| Paint ms | 14% / 109% | 7% / 92% |
 
-So on a machine like this, the counts are exact, the React, main-thread,
-transition and raster totals hold within about 15%, and the per-frame p95
-values and the small paint and style times can swing a lot in cells where they
-are only a few milliseconds or where one frame lands either side of a vsync.
-The compare rule (15% band, floor, and p < 0.05) flagged 11 of 630 medians
-between the separate passes and 4 of 630 in the interleaved run, all in those
-small or frame-quantized cells. Treat a single flagged p95 or paint value in a
-short scenario (mount, change) with suspicion; a change that shows up across
-lengths or in the totals is real.
+Most metrics sit well inside the 15% band. The worst cases are cells where the
+value is a few milliseconds, or where one frame lands either side of a vsync
+(p95 values in the short mount and change scenarios), and mount and change in
+general, which are single commits. Commit counts are exact as long as the
+component only commits when its props change; the flap on 05c9184 also commits
+during its animation, so how many commits land in a run depends on timing.
+The compare rule flagged 4 to 11 of about 650 medians between repeated runs of
+the same commit, all in those cells. Treat a lone flagged p95 or paint value
+in mount or change with suspicion; a change that shows up across lengths or in
+the totals is real.
 
 ## Caveats
 
