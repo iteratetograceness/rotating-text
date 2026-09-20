@@ -80,9 +80,9 @@
 .heroWords {
   display: grid;
   gap: 10px;
-  /* ROTATING in flap tiles is about 5.6em wide; keep it inside the page's
-     20px side padding on phones */
-  font-size: clamp(40px, calc((100vw - 40px) / 5.8), 144px);
+  /* ROTATING in equal-width flap tiles is about 6.1em wide; keep it inside
+     the page's 20px side padding on phones */
+  font-size: clamp(40px, calc((100vw - 40px) / 6.2), 144px);
   font-weight: inherit;
 }
 
