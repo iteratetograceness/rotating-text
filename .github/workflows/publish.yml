@@ -1,0 +1,64 @@
+name: Publish
+
+# Pushing a tag like v1.0.5 publishes that version to npm through npm Trusted
+# Publishing (no npm token needed) and creates a GitHub release with the
+# matching CHANGELOG.md section as its notes.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted Publishing needs npm 11.5.1 or newer.
+      - run: npm install -g npm@11
+
+      - name: Check the tag matches package.json
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      # Installing runs `prepare`, which rebuilds dist. Under yarn the rebuild
+      # is byte-for-byte what is committed, source maps included.
+      - run: npx yarn@1 install --frozen-lockfile
+
+      - name: Check the committed dist matches the build
+        run: git diff --exit-code -- dist
+
+      - run: npm test
+
+      - name: Get the release notes from CHANGELOG.md
+        run: |
+          awk -v v="$VERSION" '
+            /^## / { if (p) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { p = 1; next } }
+            p
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [ ! -s "$RUNNER_TEMP/release-notes.md" ]; then
+            echo "No CHANGELOG.md section for $VERSION"
+            exit 1
+          fi
+
+      # Authenticates through Trusted Publishing (OIDC) and adds provenance.
+      - run: npm publish
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
