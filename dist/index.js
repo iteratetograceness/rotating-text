@@ -8609,9 +8609,8 @@ var rollSpring = function rollSpring(seconds) {
     restSpeed: frequency * ROLL_REST
   };
 };
-var rollTransform = function rollTransform(_ref) {
-  var rotateX = _ref.rotateX;
-  return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + ") translateZ(var(--rt-depth))";
+var rollTransform = function rollTransform(rotateX) {
+  return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + "deg) translateZ(var(--rt-depth))";
 };
 var ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85];
 var ROLL_SHADE = [0, 0.75, 1, 0.75, 0];
@@ -8654,16 +8653,16 @@ var lit = function lit(facing) {
 var shade = function shade(facing) {
   return Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)));
 };
-var RotatingText = function RotatingText(_ref2) {
-  var text = _ref2.text,
-    _ref2$timing = _ref2.timing,
-    timing = _ref2$timing === void 0 ? 0.5 : _ref2$timing,
-    _ref2$stagger = _ref2.stagger,
-    stagger = _ref2$stagger === void 0 ? 0.1 : _ref2$stagger,
-    _ref2$variant = _ref2.variant,
-    variant = _ref2$variant === void 0 ? 'roll' : _ref2$variant,
-    className = _ref2.className,
-    style = _ref2.style;
+var RotatingText = function RotatingText(_ref) {
+  var text = _ref.text,
+    _ref$timing = _ref.timing,
+    timing = _ref$timing === void 0 ? 0.5 : _ref$timing,
+    _ref$stagger = _ref.stagger,
+    stagger = _ref$stagger === void 0 ? 0.1 : _ref$stagger,
+    _ref$variant = _ref.variant,
+    variant = _ref$variant === void 0 ? 'roll' : _ref$variant,
+    className = _ref.className,
+    style = _ref.style;
   var prefersReducedMotion = useReducedMotion();
   var still = !!prefersReducedMotion;
   var startRoll = React.useRef();
@@ -8710,11 +8709,11 @@ var splitLetters = function splitLetters(text) {
 var createAngle = function createAngle() {
   return motionValue(0);
 };
-var RollFaces = function RollFaces(_ref3) {
-  var letters = _ref3.letters,
-    duration = _ref3.duration,
-    stagger = _ref3.stagger,
-    startRef = _ref3.startRef;
+var RollFaces = function RollFaces(_ref2) {
+  var letters = _ref2.letters,
+    duration = _ref2.duration,
+    stagger = _ref2.stagger,
+    startRef = _ref2.startRef;
   var angles = React.useRef([]).current;
   while (angles.length < letters.length) angles.push(createAngle());
   useIsomorphicLayoutEffect(function () {
@@ -8771,45 +8770,36 @@ var RollFaces = function RollFaces(_ref3) {
   }, letters.join('')));
 };
 var rollShade = transform(ROLL_SHADE_ANGLES, ROLL_SHADE);
-var rollStyle = function rollStyle(rotateX) {
-  return {
-    transform: rollTransform({
-      rotateX: rotateX + "deg"
-    }),
-    opacity: String(rollShade(rotateX))
-  };
-};
-var RollLetter = React.memo(function RollLetter(_ref4) {
-  var _char3 = _ref4["char"],
-    angle = _ref4.angle,
-    offset = _ref4.offset;
+var RollLetter = React.memo(function RollLetter(_ref3) {
+  var _char3 = _ref3["char"],
+    angle = _ref3.angle,
+    offset = _ref3.offset;
   var face = React.useRef(null);
   useIsomorphicLayoutEffect(function () {
     var follow = function follow(a) {
-      var _rollStyle = rollStyle(a + offset),
-        transform = _rollStyle.transform,
-        opacity = _rollStyle.opacity;
-      face.current.style.transform = transform;
-      face.current.style.opacity = opacity;
+      var el = face.current;
+      if (!el) return;
+      el.style.transform = rollTransform(a + offset);
+      el.style.opacity = String(rollShade(a + offset));
     };
-    follow(angle.get());
+    if (angle.get() !== 0) follow(angle.get());
     return angle.on('change', follow);
   }, [angle, offset]);
-  var rest = React.useMemo(function () {
-    return rollStyle(offset);
-  }, [offset]);
   return React.createElement("span", {
     className: styles.face,
     ref: face,
-    style: rest
+    style: {
+      transform: rollTransform(offset),
+      opacity: rollShade(offset)
+    }
   }, _char3);
 });
-var FlapBoard = function FlapBoard(_ref5) {
-  var letters = _ref5.letters,
-    duration = _ref5.duration,
-    stagger = _ref5.stagger,
-    shuffles = _ref5.shuffles,
-    still = _ref5.still;
+var FlapBoard = function FlapBoard(_ref4) {
+  var letters = _ref4.letters,
+    duration = _ref4.duration,
+    stagger = _ref4.stagger,
+    shuffles = _ref4.shuffles,
+    still = _ref4.still;
   var _React$useState2 = React.useState(letters.length),
     slots = _React$useState2[0],
     setSlots = _React$useState2[1];
@@ -8853,15 +8843,15 @@ var FlapBoard = function FlapBoard(_ref5) {
     });
   }));
 };
-var FlapTile = function FlapTile(_ref6) {
-  var _char4 = _ref6["char"],
-    duration = _ref6.duration,
-    delay = _ref6.delay,
-    shuffles = _ref6.shuffles,
-    still = _ref6.still,
-    enter = _ref6.enter,
-    index = _ref6.index,
-    onBlank = _ref6.onBlank;
+var FlapTile = function FlapTile(_ref5) {
+  var _char4 = _ref5["char"],
+    duration = _ref5.duration,
+    delay = _ref5.delay,
+    shuffles = _ref5.shuffles,
+    still = _ref5.still,
+    enter = _ref5.enter,
+    index = _ref5.index,
+    onBlank = _ref5.onBlank;
   var _React$useState4 = React.useState(function () {
       var first = enter ? ' ' : _char4;
       return {
