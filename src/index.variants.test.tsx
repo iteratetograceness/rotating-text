@@ -59,7 +59,25 @@ afterEach(() => {
   cleanup()
   vi.mocked(useReducedMotion).mockReturnValue(false)
   vi.mocked(animate).mockClear()
+  vi.restoreAllMocks()
 })
+
+// jsdom does no layout, so the roll's placeholder is given 10px a letter, or
+// the width it is being held at
+const letterWidths = () => {
+  const real = window.getComputedStyle
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+    const style = real.call(window, el, pseudo)
+    if (!String(el.getAttribute('class')).includes('placeholder')) return style
+    const width =
+      (el as HTMLElement).style.width || `${el.textContent!.length * 10}px`
+    return new Proxy(style, {
+      get: (target, key) => (key === 'width' ? width : (target as any)[key])
+    })
+  })
+}
+const placeholder = (container: HTMLElement) =>
+  root(container).lastElementChild as HTMLElement
 
 const root = (container: HTMLElement) => container.firstElementChild!
 const letters = (container: HTMLElement) =>
@@ -178,6 +196,73 @@ describe('RotatingText', () => {
     const [front, back] = Array.from(root(container).children)
     expect(front.textContent).toBe('cd')
     expect(back.textContent).toBe('cd')
+  })
+
+  it('eases the width on a spring that has all but arrived by the end of the first timing, without overshooting', () => {
+    letterWidths()
+    const { rerender } = render(<RotatingText text='ab' timing={[0.4, 0.1]} />)
+    rerender(<RotatingText text='abcde' timing={[0.4, 0.1]} />)
+
+    const [target, transition] = vi
+      .mocked(animate)
+      .mock.calls[0].slice(1) as any
+    expect(target).toBe(50)
+    const { type, onUpdate, onComplete, ...physics } = transition
+    expect(type).toBe('spring')
+    const generator = spring({ ...physics, keyframes: [20, 50] })
+    const widths: number[] = []
+    for (let ms = 0; ms < 5000; ms++) {
+      const { value, done } = generator.next(ms)
+      widths.push(value)
+      if (done) break
+    }
+    // Under 0.5% of the way left at the end of the timing, and let go a
+    // little after that, about a tenth of a pixel short
+    expect(50 - widths[400]).toBeLessThan(30 * 0.005)
+    expect(widths.length / 1000).toBeLessThan(0.4 * 1.2)
+    expect(50 - widths[widths.length - 2]).toBeLessThan(0.15)
+    widths.forEach((width, i) => {
+      expect(width).toBeGreaterThanOrEqual(i ? widths[i - 1] : 20)
+      expect(width).toBeLessThanOrEqual(50)
+    })
+  })
+
+  it('eases the width in from nothing after the text was empty', () => {
+    letterWidths()
+    const { rerender } = render(<RotatingText text='' />)
+    rerender(<RotatingText text='abc' />)
+    expect(vi.mocked(animate).mock.calls[0][1]).toBe(30)
+  })
+
+  it('jumps to the new width when reduced motion is preferred', () => {
+    vi.mocked(useReducedMotion).mockReturnValue(true)
+    letterWidths()
+    const { container, rerender } = render(<RotatingText text='ab' />)
+    rerender(<RotatingText text='abcde' />)
+
+    expect(animate).not.toHaveBeenCalled()
+    expect(placeholder(container).style.width).toBe('')
+    expect(placeholder(container).textContent).toBe('abcde')
+  })
+
+  it('jumps to the new width when the first letter has no timing', () => {
+    letterWidths()
+    const { container, rerender } = render(
+      <RotatingText text='ab' timing={0} />
+    )
+    rerender(<RotatingText text='abcde' timing={0} />)
+
+    expect(animate).not.toHaveBeenCalled()
+    expect(placeholder(container).style.width).toBe('')
+  })
+
+  it('does not ease the width when the text changes to one as wide', () => {
+    letterWidths()
+    const { container, rerender } = render(<RotatingText text='ab' />)
+    rerender(<RotatingText text='cd' />)
+
+    expect(animate).not.toHaveBeenCalled()
+    expect(placeholder(container).style.width).toBe('')
   })
 
   it('lets rolling letters settle before another hover can start a flip', () => {
