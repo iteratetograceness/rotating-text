@@ -1,7 +1,12 @@
 import * as React from 'react'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useAnimationControls, useReducedMotion } from 'framer-motion'
+import {
+  animate,
+  spring,
+  useAnimationControls,
+  useReducedMotion
+} from 'framer-motion'
 import { RotatingText } from '.'
 
 // Replace motion.div/motion.span with plain elements that remember the
@@ -46,13 +51,16 @@ vi.mock('framer-motion', async (importOriginal) => {
     useAnimationControls: vi.fn(() => ({
       start: vi.fn(() => Promise.resolve())
     })),
-    useReducedMotion: vi.fn(() => false)
+    useReducedMotion: vi.fn(() => false),
+    // Records each letter's turn and runs it
+    animate: vi.fn(actual.animate)
   }
 })
 
 afterEach(() => {
   cleanup()
   vi.mocked(useReducedMotion).mockReturnValue(false)
+  vi.mocked(animate).mockClear()
 })
 
 const root = (container: HTMLElement) => container.firstElementChild!
@@ -71,75 +79,140 @@ const movers = (container: HTMLElement) =>
   )
 const lastControls = () =>
   vi.mocked(useAnimationControls).mock.results.at(-1)!.value
+const hover = (container: HTMLElement) =>
+  propsOf.get(root(container))!.onHoverStart()
+
+// The turn each rolling letter was given on hover, in letter order
+const turns = () =>
+  vi.mocked(animate).mock.calls.map(([, target, transition]) => ({
+    target,
+    ...(transition as Record<string, any>)
+  }))
+
+// Runs a letter's turn through framer-motion's own spring, so the angles
+// and the moment it counts as settled are the ones the component gets
+const simulate = ({ type, delay, onComplete, onStop, ...turn }: any) => {
+  const generator = spring({ ...turn, keyframes: [0, -90] })
+  const angles: number[] = []
+  for (let ms = 0; ms < 5000; ms++) {
+    const { value, done } = generator.next(ms)
+    angles.push(value)
+    if (done) return { angles, settled: ms / 1000 }
+  }
+  throw new Error('The turn never settled')
+}
 
 describe('RotatingText', () => {
-  it('gives each letter a rotate variant using the per-letter timing', () => {
+  it('turns each letter a quarter turn on a spring that settles within its timing', () => {
     const { container } = render(
-      <RotatingText text='abc' timing={[0.1, 0.2, 0.3]} />
+      <RotatingText text='abc' timing={[0.2, 0.4, 0.8]} />
     )
-    const durations = letters(container).map(
-      (s) => rotation(s).transition.duration
-    )
-    // front face, then back face
-    expect(durations).toEqual([0.1, 0.2, 0.3, 0.1, 0.2, 0.3])
+    hover(container)
+
+    const [a, b, c] = turns()
+    expect(turns().map((turn) => turn.target)).toEqual([-90, -90, -90])
+    for (const [turn, timing] of [
+      [a, 0.2],
+      [b, 0.4],
+      [c, 0.8]
+    ] as const) {
+      expect(turn.type).toBe('spring')
+      const { angles, settled } = simulate(turn)
+      // Settles inside its timing, and uses most of it
+      expect(settled).toBeLessThanOrEqual(timing)
+      expect(settled).toBeGreaterThan(timing * 0.75)
+      // Swings a few degrees past the next face before settling
+      expect(Math.min(...angles)).toBeLessThan(-95)
+      expect(Math.min(...angles)).toBeGreaterThan(-100)
+    }
   })
 
-  it('computes one duration per letter after the text prop changes', () => {
+  it('gives every letter its own turn after the text prop changes', () => {
     const { container, rerender } = render(
       <RotatingText text='ab' timing={0.4} />
     )
     rerender(<RotatingText text='abcd' timing={0.4} />)
+    hover(container)
 
-    const spans = letters(container)
-    expect(spans).toHaveLength(8)
-    for (const span of spans) {
-      expect(rotation(span).transition.duration).toBe(0.4)
-    }
+    expect(letters(container)).toHaveLength(8)
+    expect(turns()).toHaveLength(4)
+    expect(new Set(turns().map((turn) => turn.stiffness)).size).toBe(1)
   })
 
   it('reuses the last timing entry for letters past the end of the array', () => {
     const { container } = render(
       <RotatingText text='abcd' timing={[0.1, 0.2]} />
     )
-    const durations = letters(container)
-      .slice(0, 4)
-      .map((s) => rotation(s).transition.duration)
-    expect(durations).toEqual([0.1, 0.2, 0.2, 0.2])
+    hover(container)
+
+    const stiffness = turns().map((turn) => turn.stiffness)
+    expect(stiffness[0]).toBeGreaterThan(stiffness[1])
+    expect(stiffness.slice(1)).toEqual([
+      stiffness[1],
+      stiffness[1],
+      stiffness[1]
+    ])
+  })
+
+  it('turns a letter with no timing at once, still on its stagger', () => {
+    const { container } = render(
+      <RotatingText text='ab' timing={0} stagger={0.3} />
+    )
+    hover(container)
+    expect(simulate(turns()[0]).settled).toBeLessThan(0.02)
+    expect(turns().map((turn) => turn.delay)).toEqual([0, 0.3])
   })
 
   it('starts each letter one stagger after the previous one', () => {
     const { container } = render(<RotatingText text='abc' stagger={0.2} />)
-    const delays = letters(container)
-      .slice(0, 3)
-      .map((s) => rotation(s).transition.delay)
-    expect(delays).toEqual([0, 0.2, 0.4])
+    hover(container)
+    expect(turns().map((turn) => turn.delay)).toEqual([0, 0.2, 0.4])
   })
 
-  it('starts the rotate animation on hover', () => {
-    const { container } = render(<RotatingText text='abc' />)
+  it('shows a text change at once when no flip is running', () => {
+    const { container, rerender } = render(<RotatingText text='ab' />)
+    rerender(<RotatingText text='cd' />)
+    const [front, back] = Array.from(root(container).children)
+    expect(front.textContent).toBe('cd')
+    expect(back.textContent).toBe('cd')
+  })
 
-    propsOf.get(root(container))!.onHoverStart()
+  it('starts the flap animation on hover', () => {
+    const { container } = render(<RotatingText text='abc' variant='flap' />)
+
+    hover(container)
     expect(lastControls().start).toHaveBeenCalledWith('rotate')
   })
 
-  it('lets a flip finish before another hover can start one', () => {
+  it('lets rolling letters settle before another hover can start a flip', () => {
+    const { container } = render(<RotatingText text='abc' />)
+
+    hover(container)
+    hover(container)
+    expect(turns()).toHaveLength(3)
+  })
+
+  it('lets a flap flip finish before another hover can start one', () => {
     const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
-    // Last letter starts at 0.2s and runs 0.5s, so the flip ends at 1700ms
+    // Last flap starts at 0.2s and runs 0.5s, so the flip ends at 1700ms
     const { container } = render(
-      <RotatingText text='abc' stagger={0.1} timing={0.5} />
+      <RotatingText text='abc' variant='flap' stagger={0.1} timing={0.5} />
     )
     const { onHoverStart } = propsOf.get(root(container))!
     const controls = lastControls()
 
-    onHoverStart()
-    now.mockReturnValue(1650)
-    onHoverStart()
-    expect(controls.start).toHaveBeenCalledTimes(1)
+    try {
+      onHoverStart()
+      now.mockReturnValue(1650)
+      onHoverStart()
+      expect(controls.start).toHaveBeenCalledTimes(1)
 
-    now.mockReturnValue(1700)
-    onHoverStart()
-    expect(controls.start).toHaveBeenCalledTimes(2)
-    now.mockRestore()
+      now.mockReturnValue(1700)
+      onHoverStart()
+      expect(controls.start).toHaveBeenCalledTimes(2)
+    } finally {
+      now.mockRestore()
+    }
   })
 
   it('gives each flap the per-letter timing and stagger', () => {
@@ -182,26 +255,25 @@ describe('RotatingText', () => {
     vi.mocked(useReducedMotion).mockReturnValue(true)
     const { container } = render(<RotatingText text='abc' />)
 
-    propsOf.get(root(container))!.onHoverStart()
+    hover(container)
     expect(lastControls().start).not.toHaveBeenCalled()
+    expect(animate).not.toHaveBeenCalled()
   })
 
-  it('drops the letter rotation and scales on hover when reduced motion is preferred', () => {
+  it('scales on hover instead of turning when reduced motion is preferred', () => {
     vi.mocked(useReducedMotion).mockReturnValue(true)
     const { container } = render(<RotatingText text='abc' />)
 
-    for (const span of letters(container)) {
-      expect(propsOf.get(span)!.variants).toBeUndefined()
-    }
+    hover(container)
+    expect(animate).not.toHaveBeenCalled()
     expect(propsOf.get(root(container))!.whileHover).toEqual({ scale: 1.05 })
   })
 
-  it('rotates letters and has no hover scale when reduced motion is not preferred', () => {
+  it('turns letters and has no hover scale when reduced motion is not preferred', () => {
     const { container } = render(<RotatingText text='abc' />)
 
-    for (const span of letters(container)) {
-      expect(rotation(span)).toHaveProperty('rotateX')
-    }
+    hover(container)
+    expect(turns()).toHaveLength(3)
     expect(propsOf.get(root(container))!.whileHover).toBeUndefined()
   })
 

@@ -13,6 +13,16 @@
 - The default roll is now a real 3D turn. Each letter rotates like the face of
   a cube with perspective, dims as it turns away, and settles with a small
   overshoot, instead of shrinking and sliding while it rotates flat.
+- The roll is driven by a damped spring: a letter leaves the moment it is
+  hovered, swings about 6 degrees past the next face and settles within its
+  `timing`. For the same `timing` the turn itself is quicker than before, and
+  the rest of the time goes on settling. The copy on the next face is locked
+  to it, so the two faces can never come apart.
+- Changing `text` while letters are rolling no longer snaps the changed
+  letters back to rest part way through their turn. They keep turning and
+  show the new text, and a letter that comes back later starts at rest.
+- After a flip the letters come to rest on their front faces, so selecting
+  and copying the text works the same before and after a hover.
 - Hovering again while letters are still moving no longer restarts the flip
   from the beginning; the running flip finishes first.
 - With reduced motion on, the text is drawn once instead of as two

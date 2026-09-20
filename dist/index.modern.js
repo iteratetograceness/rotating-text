@@ -1,4 +1,19 @@
-import React__default, { createContext, useContext, useLayoutEffect, useEffect, useRef, useCallback, useMemo, forwardRef, createElement, useId, useState, Fragment } from 'react';
+import React__default, { createContext, useContext, useLayoutEffect, useEffect, useRef, useCallback, useMemo, forwardRef, createElement, useId, useState, Fragment, memo } from 'react';
+
+function _extends() {
+  _extends = Object.assign ? Object.assign.bind() : function (target) {
+    for (var i = 1; i < arguments.length; i++) {
+      var source = arguments[i];
+      for (var key in source) {
+        if (Object.prototype.hasOwnProperty.call(source, key)) {
+          target[key] = source[key];
+        }
+      }
+    }
+    return target;
+  };
+  return _extends.apply(this, arguments);
+}
 
 /**
  * @public
@@ -8737,12 +8752,22 @@ function useAnimationControls() {
 
 var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK"};
 
-var ROLL_TIMES = [0, 0.64, 0.84, 1];
-var ROLL_EASE = [[0.45, 0, 0.25, 1], [0.4, 0, 0.6, 1], [0.4, 0, 0.6, 1]];
-var ROLL_IN = [90, -7, 2, 0];
-var ROLL_OUT = ROLL_IN.map(function (angle) {
-  return angle - 90;
-});
+var ROLL_DAMPING = 0.65;
+var ROLL_REST = 0.5;
+var rollSpring = function rollSpring(seconds) {
+  var time = seconds > 0 ? seconds : 0.01;
+  var decay = Math.log(90 / ROLL_REST / Math.sqrt(1 - Math.pow(ROLL_DAMPING, 2))) / time;
+  var frequency = decay / ROLL_DAMPING;
+  return {
+    type: 'spring',
+    stiffness: Math.pow(frequency, 2),
+    damping: 2 * decay,
+    mass: 1,
+    velocity: 0,
+    restDelta: ROLL_REST,
+    restSpeed: frequency * ROLL_REST
+  };
+};
 var rollTransform = function rollTransform(_ref) {
   var rotateX = _ref.rotateX;
   return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + ") translateZ(var(--rt-depth))";
@@ -8766,6 +8791,7 @@ var RotatingText = function RotatingText(_ref2) {
   var still = !!prefersReducedMotion;
   var animate = useAnimationControls();
   var busyUntil = useRef(0);
+  var startRoll = useRef();
   var duration = function duration(i) {
     return Array.isArray(timing) ? timing[Math.min(i, timing.length - 1)] : timing;
   };
@@ -8774,13 +8800,18 @@ var RotatingText = function RotatingText(_ref2) {
     return {
       duration: duration(i),
       delay: i * stagger,
-      times: variant === 'flap' ? FLAP_TIMES : ROLL_TIMES,
-      ease: variant === 'flap' ? FLAP_EASE : ROLL_EASE
+      times: FLAP_TIMES,
+      ease: FLAP_EASE
     };
   };
   var flip = function flip() {
+    if (still) return;
+    if (variant !== 'flap') {
+      if (startRoll.current) startRoll.current();
+      return;
+    }
     var now = performance.now();
-    if (still || now < busyUntil.current) return;
+    if (now < busyUntil.current) return;
     var longest = Math.max.apply(Math, letters.map(function (_, i) {
       return i * stagger + duration(i);
     }));
@@ -8810,8 +8841,9 @@ var RotatingText = function RotatingText(_ref2) {
     });
   }) : createElement(RollFaces, {
     letters: letters,
-    front: still ? undefined : rollVariant(ROLL_OUT, transitionFor),
-    back: still ? undefined : rollVariant(ROLL_IN, transitionFor)
+    duration: duration,
+    stagger: stagger,
+    startRef: startRoll
   }));
 };
 var motionStyle = function motionStyle(style) {
@@ -8823,55 +8855,78 @@ var splitLetters = function splitLetters(text) {
     return part.segment;
   }) : Array.from(text);
 };
-var rollVariant = function rollVariant(angles, transitionFor) {
-  return {
-    rotate: function rotate(i) {
-      return {
-        rotateX: angles,
-        transition: transitionFor(i)
-      };
-    }
-  };
+var createAngle = function createAngle() {
+  return motionValue(0);
 };
 var RollFaces = function RollFaces(_ref3) {
   var letters = _ref3.letters,
-    front = _ref3.front,
-    back = _ref3.back;
+    duration = _ref3.duration,
+    stagger = _ref3.stagger,
+    startRef = _ref3.startRef;
+  var angles = useRef([]).current;
+  while (angles.length < letters.length) angles.push(createAngle());
+  useIsomorphicLayoutEffect(function () {
+    angles.splice(letters.length).forEach(function (a) {
+      return a.stop();
+    });
+    var turning = angles.slice();
+    startRef.current = function () {
+      if (turning.some(function (a) {
+        return a.isAnimating();
+      })) return;
+      turning.forEach(function (angle, i) {
+        return animate$1(angle, -90, _extends({}, rollSpring(duration(i)), {
+          delay: i * stagger,
+          onComplete: function onComplete() {
+            return angle.jump(0);
+          },
+          onStop: function onStop() {
+            return angle.set(0);
+          }
+        }));
+      });
+    };
+  });
+  useEffect(function () {
+    return function () {
+      startRef.current = undefined;
+      angles.forEach(function (a) {
+        return a.stop();
+      });
+    };
+  }, []);
   return createElement(Fragment, null, createElement("div", {
     className: styles.front
   }, letters.map(function (_char2, i) {
     return createElement(RollLetter, {
-      key: "" + _char2 + i,
+      key: i,
       "char": _char2,
-      index: i,
-      variants: front,
-      from: 0
+      angle: angles[i],
+      offset: 0
     });
   })), createElement("div", {
     className: styles.back + " " + styles.copy,
     "aria-hidden": 'true'
   }, letters.map(function (_char3, i) {
     return createElement(RollLetter, {
-      key: "" + _char3 + i + "copy",
+      key: i,
       "char": _char3,
-      index: i,
-      variants: back,
-      from: ROLL_IN[0]
+      angle: angles[i],
+      offset: 90
     });
   })), createElement("div", {
     className: styles.placeholder
   }, letters.join('')));
 };
-var RollLetter = function RollLetter(_ref4) {
+var RollLetter = memo(function RollLetter(_ref4) {
   var _char4 = _ref4["char"],
-    index = _ref4.index,
-    variants = _ref4.variants,
-    from = _ref4.from;
-  var rotateX = useMotionValue(from);
+    angle = _ref4.angle,
+    offset = _ref4.offset;
+  var rotateX = useTransform(angle, function (a) {
+    return a + offset;
+  });
   var opacity = useTransform(rotateX, ROLL_SHADE_ANGLES, ROLL_SHADE);
   return createElement(motion.span, {
-    custom: index,
-    variants: variants,
     className: styles.face,
     style: motionStyle({
       rotateX: rotateX,
@@ -8879,7 +8934,7 @@ var RollLetter = function RollLetter(_ref4) {
     }),
     transformTemplate: rollTransform
   }, _char4);
-};
+});
 var FlapTile = function FlapTile(_ref5) {
   var _char5 = _ref5["char"],
     fall = _ref5.fall;
