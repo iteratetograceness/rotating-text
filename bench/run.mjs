@@ -98,7 +98,7 @@ const TRACE_CATEGORIES = [
 const QUIET_MS = 300 // no DOM changes for this long means the transition ended
 const CAP_MS = 15000
 const TAIL_MS = 100 // measured past the last style/layout/paint, to catch its frame
-const VIEWPORT = { width: 1800, height: 400 } // wide enough for 32 flap tiles at 56px
+const VIEWPORT = { width: 3200, height: 400 } // wide enough for 32 flap tiles at 56px, with room to spare
 
 const browser = await chromium.launch({
   channel: 'chromium',
@@ -130,6 +130,9 @@ async function measureOnce(pageUrl, variant, length, scenarioName) {
       await page.evaluate((p) => window.__bench.mount(p), props)
       const setup = await page.evaluate((q) => window.__bench.waitSettled(q, 5000), QUIET_MS)
       if (setup.capped) errors.push('still changing 5s after mounting; the measurement started mid-activity')
+      // Content off screen isn't painted or counted as layout shift
+      const right = await page.evaluate(() => document.getElementById('after').getBoundingClientRect().right)
+      if (right > VIEWPORT.width) errors.push(`the line is ${Math.round(right)}px wide, wider than the viewport`)
     }
     const boxesBefore = await page.evaluate(() => window.__bench.boxes())
     const before = await cdpMetrics(cdp)
