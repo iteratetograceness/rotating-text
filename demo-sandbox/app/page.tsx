@@ -85,8 +85,8 @@ export default function Home() {
           </div>
           <h1 className={styles.heroWords}>
             <span className='sr-only'>Rotating Text</span>
-            <Flip text='Rotating' stagger={0.07} />
-            <Flip text='Text' />
+            <Flip text='ROTATING' stagger={0.07} />
+            <Flip text='TEXT' />
           </h1>
           <p className={styles.lede}>
             A 3D flip-on-hover text component for React, built with Framer
@@ -97,7 +97,7 @@ export default function Home() {
               Every tiled word on this page is the component, running.
             </span>
             <span className={styles.touchHint}>
-              Open on a desktop and hover the name to see it flip.
+              Tap the name to see it flip.
             </span>
           </p>
           <div className={styles.install}>
@@ -149,10 +149,12 @@ export default function Home() {
               <tbody>
                 {PROPS.map((prop) => (
                   <tr key={prop.name}>
-                    <td>{prop.name}</td>
-                    <td>{prop.type}</td>
-                    <td className={styles.default}>{prop.value}</td>
-                    <td>{prop.about}</td>
+                    <td className={styles.propName}>{prop.name}</td>
+                    <td className={styles.propType}>{prop.type}</td>
+                    <td className={styles.default} data-label='Default'>
+                      {prop.value}
+                    </td>
+                    <td className={styles.about}>{prop.about}</td>
                   </tr>
                 ))}
               </tbody>
@@ -169,8 +171,7 @@ export default function Home() {
               and spaces collapse, so use one component per word.
             </li>
             <li>
-              The flip runs on hover, so touch screens see the text standing
-              still.
+              The flip starts on hover. On touch screens, a tap starts it.
             </li>
             <li>
               With reduced motion turned on, the flip becomes a gentle scale.

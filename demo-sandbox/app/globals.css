@@ -182,3 +182,11 @@ button.copy {
   max-width: 66ch;
   margin-bottom: 14px;
 }
+
+/* Finger-sized targets on touch screens */
+@media (pointer: coarse) {
+  button.copy {
+    min-height: 44px;
+    min-width: 80px;
+  }
+}

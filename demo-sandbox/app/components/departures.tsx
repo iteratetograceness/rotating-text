@@ -1,6 +1,13 @@
 'use client'
 
-import { ChangeEvent, memo, useCallback, useEffect, useState } from 'react'
+import {
+  ChangeEvent,
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from 'react'
 import styles from './departures.module.css'
 import { CodeBlock } from './code-block'
 import { Flip } from './flip'
@@ -112,14 +119,14 @@ function MyApp() {
 const Board = memo(function Board({
   onTry
 }: {
-  onTry: (preset: Preset) => void
+  onTry: (preset: Preset, fromKeyboard: boolean) => void
 }) {
   return (
     <section id='departures' className='section'>
       <span className='label'>Examples</span>
       <h2>Departures</h2>
       <p>
-        Each row is a preset. Hover a word to run it, or press{' '}
+        Each row is a preset. Hover or tap a word to run it, or press{' '}
         <strong>Try it</strong> to load its settings into the playground.
       </p>
       <div className={styles.board}>
@@ -147,15 +154,20 @@ const Board = memo(function Board({
                     timing={preset.timing}
                   />
                 </td>
-                <td>{fixed(preset.stagger)}</td>
-                <td>{timingLabel(preset.timing)}</td>
+                <td className={styles.stagger} data-label='Stagger'>
+                  {fixed(preset.stagger)}
+                </td>
+                <td className={styles.timing} data-label='Timing'>
+                  {timingLabel(preset.timing)}
+                </td>
                 <td className={styles.feel}>{preset.feel}</td>
                 <td className={styles.status}>{preset.status}</td>
-                <td>
+                <td className={styles.tryCell}>
                   <button
                     type='button'
                     className={styles.try}
-                    onClick={() => onTry(preset)}
+                    // detail is 0 for Enter or Space, a click count otherwise
+                    onClick={(event) => onTry(preset, event.detail === 0)}
                   >
                     Try it
                     <span className='sr-only'> with {preset.text}</span>
@@ -177,29 +189,48 @@ export function Departures() {
   const [timingRaw, setTimingRaw] = useState('0.5')
   const [timing, setTiming] = useState<number | number[]>(0.5)
   const [size, setSize] = useState(96)
+  const previewRef = useRef<HTMLDivElement>(null)
 
-  // Start smaller on phones so the default word fits the preview
-  useEffect(() => {
-    if (window.matchMedia('(max-width: 760px)').matches) setSize(56)
+  // Largest size, up to 96px, at which the word fits the preview without
+  // scrolling. Display caps with tiles take up to about 0.7em a letter.
+  const fitSize = useCallback((word: string) => {
+    const box = previewRef.current
+    if (!box) return
+    const room = box.clientWidth - 48
+    const fit = room / (Array.from(word).length * 0.7)
+    setSize(Math.max(24, Math.min(96, Math.floor(fit / 4) * 4)))
   }, [])
+
+  useEffect(() => {
+    fitSize(DEFAULT_TEXT)
+  }, [fitSize])
 
   const shownText = text.trim() === '' ? DEFAULT_TEXT : text
   const timingValid = parseTiming(timingRaw) !== null
   const staggerValid = parseStagger(staggerRaw) !== null
 
-  const tryPreset = useCallback((preset: Preset) => {
-    setText(preset.text)
-    setStaggerRaw(String(preset.stagger))
-    setStagger(preset.stagger)
-    setTimingRaw(timingInput(preset.timing))
-    setTiming(preset.timing)
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    document
-      .getElementById('playground')
-      ?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' })
-    // Keyboard users land on the controls they just loaded
-    document.getElementById('pg-text')?.focus({ preventScroll: true })
-  }, [])
+  const tryPreset = useCallback(
+    (preset: Preset, fromKeyboard: boolean) => {
+      setText(preset.text)
+      setStaggerRaw(String(preset.stagger))
+      setStagger(preset.stagger)
+      setTimingRaw(timingInput(preset.timing))
+      setTiming(preset.timing)
+      fitSize(preset.text)
+      const reduce = window.matchMedia(
+        '(prefers-reduced-motion: reduce)'
+      ).matches
+      document
+        .getElementById('playground')
+        ?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' })
+      // Keyboard users land on the controls they just loaded. Taps don't
+      // move focus, which would open the keyboard on phones.
+      if (fromKeyboard) {
+        document.getElementById('pg-text')?.focus({ preventScroll: true })
+      }
+    },
+    [fitSize]
+  )
 
   return (
     <>
@@ -210,7 +241,7 @@ export function Departures() {
         <h2>Playground</h2>
         <div className={styles.playground}>
           <div className={styles.stage}>
-            <div className={styles.preview}>
+            <div className={styles.preview} ref={previewRef}>
               <span className='sr-only'>{shownText}</span>
               <Flip
                 text={shownText}
@@ -220,7 +251,7 @@ export function Departures() {
               />
             </div>
             <p className={styles.hint}>
-              Hover the word. The tiles are this page&apos;s own CSS; the
+              Hover or tap the word. The tiles are this page&apos;s own CSS; the
               component ships plain letters you style with{' '}
               <code>className</code>.
             </p>
