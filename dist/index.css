@@ -39,9 +39,13 @@
 
 /* Split-flap tiles. Colours and sizes come from custom properties so a page
    can restyle the board without reaching into the markup. */
+/* Every tile is as wide as the widest one, like the modules of a real board,
+   so a letter changing never moves the tiles beside it. */
 ._1_y2_ {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: start;
   gap: var(--rt-gap, 0.08em);
 }
 
@@ -80,6 +84,25 @@
 
 ._2mmHj {
   visibility: hidden;
+}
+
+/* The widest capitals, in lines with no height, so every tile is as wide as
+   them whatever letter it shows, and new text never resizes the board.
+   --rt-widest can name other letters, or none. */
+._2mmHj::before {
+  content: var(--rt-widest, 'M\AW');
+  display: block;
+  height: 0;
+  overflow: hidden;
+}
+
+/* The letter being flipped away, in a line with no height, so it only
+   widens the tile. */
+._2mmHj[data-was]::after {
+  content: attr(data-was);
+  display: block;
+  height: 0;
+  overflow: hidden;
 }
 
 ._1Gz1Q {
@@ -132,4 +155,13 @@
   background: #000;
   opacity: 0;
   pointer-events: none;
+}
+
+/* The falling flap's shadow on the bottom half grows down from the hinge,
+   with a soft leading edge. */
+._3IP-G {
+  top: 50%;
+  transform: scaleY(0);
+  transform-origin: top;
+  background: linear-gradient(to bottom, #000 70%, transparent);
 }

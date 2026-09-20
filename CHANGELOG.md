@@ -5,8 +5,15 @@
 ### Features
 
 - New `variant="flap"` draws each letter as a split-flap tile: the top half
-  falls over a centre hinge, lands over the bottom half and bounces to rest.
-  Tile colours and sizes are set with CSS custom properties (see the README).
+  falls over a centre hinge, speeding up like anything under gravity, lands
+  over the bottom half and bounces twice, each time lower, before it rests.
+  Faces are shaded by how squarely they face the light, and the falling flap
+  casts a shadow down the bottom half. When `text` changes, each tile flips
+  from its old letter to its new one; a change mid-flip is picked up as soon
+  as the flap lands. Tiles past the end of shorter text flip to blank before
+  they go, and new tiles flip in from blank. Every tile is as wide as the
+  widest capitals (`M` and `W`), so new text never resizes the board. Tile colours
+  and sizes are set with CSS custom properties (see the README).
 
 ### Changes
 
