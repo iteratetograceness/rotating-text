@@ -8660,13 +8660,9 @@ var RotatingText = function RotatingText(_ref) {
       }
     }
   };
-  var duration = React.useMemo(function () {
-    if (Array.isArray(timing)) return timing;else return Array.from({
-      length: text.length
-    }, function () {
-      return timing;
-    });
-  }, [timing]);
+  var duration = function duration(i) {
+    return Array.isArray(timing) ? timing[Math.min(i, timing.length - 1)] : timing;
+  };
   var wordCopy = prefersReducedMotion ? undefined : {
     rotate: function rotate(i) {
       return {
@@ -8675,7 +8671,7 @@ var RotatingText = function RotatingText(_ref) {
         scaleX: [1, 0.4],
         scaleY: [1, 0.4],
         transition: {
-          duration: duration[i]
+          duration: duration(i)
         }
       };
     }
@@ -8688,13 +8684,13 @@ var RotatingText = function RotatingText(_ref) {
         scaleX: [0.4, 1],
         scaleY: [0.4, 1],
         transition: {
-          duration: duration[i]
+          duration: duration(i)
         }
       };
     }
   };
   return React.createElement(motion.div, {
-    className: styles.container + " " + className,
+    className: className ? styles.container + " " + className : styles.container,
     variants: hoverArea,
     animate: animate,
     initial: 'initial',
