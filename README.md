@@ -20,23 +20,33 @@ npm install --save rotating-text
 You can use `className` and `style` to add further customization and styling.
 
 ```tsx
-import React, { Component } from 'react'
+import React from 'react'
 
-import RotatingText from 'rotating-text'
+import { RotatingText } from 'rotating-text'
 import 'rotating-text/dist/index.css'
 
-function MyApp {
+function MyApp() {
   return (
     <RotatingText
       text="HOVERME"
       stagger={0.1}
       timing={0.5}
       className="rotating-text"
-      styles={{ fontSize: '100px' }}
+      style={{ fontSize: '100px' }}
     />
   )
 }
 ```
+
+### Props
+
+| Prop        | Type                   | Default     | Description                                                          |
+| ----------- | ---------------------- | ----------- | -------------------------------------------------------------------- |
+| `text`      | `string`               | (required)  | Text to animate.                                                     |
+| `stagger`   | `number`               | `0.1`       | Seconds between each letter starting its animation.                  |
+| `timing`    | `number \| number[]`   | `0.5`       | Seconds each letter's animation lasts, or one duration per letter.   |
+| `className` | `string`               | `undefined` | Class name added to the outer container.                             |
+| `style`     | `React.CSSProperties`  | `undefined` | Inline styles applied to the outer container.                        |
 
 ## Notes
 
