@@ -162,3 +162,112 @@
     font-size: 32px !important;
   }
 }
+
+/* Tablets: drop the Feel column so the whole board, Try it included,
+   fits without scrolling sideways */
+@media (min-width: 761px) and (max-width: 900px) {
+  .board table {
+    min-width: 0;
+  }
+
+  .board th:nth-child(4),
+  .feel {
+    display: none;
+  }
+}
+
+/* Phones: each row becomes a card, so Try it is never off screen.
+   The word and its button share the top line, the settings sit below. */
+@media (max-width: 760px) {
+  .board {
+    overflow-x: visible;
+  }
+
+  .board table,
+  .board tbody {
+    display: block;
+    min-width: 0;
+  }
+
+  .board thead {
+    display: none;
+  }
+
+  /* Flex rather than grid so a long word or timing wraps instead of
+     widening the row. The ::before item forces the line break. */
+  .board tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    /* Half gaps: the zero-height break item adds a row of its own */
+    gap: 6px 20px;
+    padding: 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .board tr::before {
+    content: '';
+    order: 2;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .board tr:last-child {
+    border-bottom: 0;
+  }
+
+  .board td {
+    padding: 0;
+    border: 0;
+  }
+
+  .board td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font: 500 12px/1.4 var(--mono);
+    color: var(--dim);
+  }
+
+  .word {
+    order: 0;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .tryCell {
+    order: 1;
+  }
+
+  .stagger,
+  .timing,
+  .status {
+    order: 3;
+  }
+
+  .status {
+    margin-left: auto;
+    align-self: end;
+  }
+
+  .feel {
+    order: 4;
+    flex-basis: 100%;
+    white-space: normal !important;
+  }
+}
+
+/* Finger-sized targets on touch screens */
+@media (pointer: coarse) {
+  .try {
+    min-height: 44px;
+    padding-inline: 16px;
+  }
+
+  .control input:not([type='range']) {
+    min-height: 44px;
+  }
+
+  .control input[type='range'] {
+    height: 44px;
+  }
+}

@@ -29,6 +29,27 @@
   text-decoration: none;
 }
 
+/* Taller link boxes on touch screens without moving the text */
+@media (pointer: coarse) {
+  .strip nav a,
+  .endLinks a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .strip nav a,
+  .endLinks a {
+    min-width: 44px;
+    justify-content: center;
+  }
+
+  .strip,
+  .endLinks {
+    align-items: center;
+  }
+}
+
 .strip nav a:hover {
   color: var(--signal);
 }
@@ -168,6 +189,60 @@
 
 .default {
   color: var(--signal);
+}
+
+/* Phones: each prop becomes a card instead of a table to scroll */
+@media (max-width: 760px) {
+  .props table,
+  .props tbody {
+    display: block;
+    min-width: 0;
+  }
+
+  .props thead {
+    display: none;
+  }
+
+  .props tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 16px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .props tr:last-child {
+    border-bottom: 0;
+  }
+
+  .props td {
+    padding: 0;
+    border: 0;
+  }
+
+  .propName {
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .propType {
+    color: var(--dim);
+  }
+
+  .props .default {
+    margin-left: auto;
+  }
+
+  .props .default::before {
+    content: attr(data-label) ' ';
+    color: var(--dim);
+  }
+
+  .about {
+    flex-basis: 100%;
+    margin-top: 4px;
+  }
 }
 
 /* Notes, one per row like the board */

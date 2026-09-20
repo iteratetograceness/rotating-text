@@ -155,10 +155,12 @@ export default function Home() {
               <tbody>
                 {PROPS.map((prop) => (
                   <tr key={prop.name}>
-                    <td>{prop.name}</td>
-                    <td>{prop.type}</td>
-                    <td className={styles.default}>{prop.value}</td>
-                    <td>{prop.about}</td>
+                    <td className={styles.propName}>{prop.name}</td>
+                    <td className={styles.propType}>{prop.type}</td>
+                    <td className={styles.default} data-label='Default'>
+                      {prop.value}
+                    </td>
+                    <td className={styles.about}>{prop.about}</td>
                   </tr>
                 ))}
               </tbody>
@@ -175,8 +177,8 @@ export default function Home() {
               and spaces collapse, so use one component per word.
             </li>
             <li>
-              The flip runs when the pointer moves onto the text, which on a
-              touch screen is a tap. A flip always runs to the end.
+              The flip starts on hover. On touch screens, a tap starts it.
+              A flip always runs to the end.
             </li>
             <li>
               With reduced motion turned on, the flip becomes a gentle scale.
