@@ -1,0 +1,164 @@
+/* The board: a timetable of presets. It scrolls sideways inside itself on
+   phones so the page never does. */
+.board {
+  /* Keeps the sr-only labels inside the scroller */
+  position: relative;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--flap) 45%, var(--board));
+}
+
+.board table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.board th {
+  text-align: left;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.board td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rule);
+  font: 400 14px var(--mono);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.board tr:last-child td {
+  border-bottom: 0;
+}
+
+.word {
+  font-size: 40px !important;
+}
+
+.feel {
+  font-family: var(--sans) !important;
+  color: var(--dim);
+}
+
+.status {
+  font: 500 13px var(--mono) !important;
+  color: var(--signal);
+}
+
+.try {
+  font: 500 13px/1 var(--mono);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms;
+}
+
+.try:hover {
+  color: var(--signal);
+  border-color: var(--signal);
+}
+
+/* Playground: preview on the left, controls on the right */
+.playground {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.stage {
+  min-width: 0;
+}
+
+.preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 280px;
+  padding: 32px 24px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--flap) 45%, var(--board));
+}
+
+/* Centre while it fits, scroll from the left edge once it doesn't */
+.preview > div {
+  margin: 0 auto;
+}
+
+.hint {
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--dim);
+}
+
+.controls {
+  display: grid;
+  gap: 18px;
+}
+
+.control {
+  display: grid;
+  gap: 6px;
+}
+
+.control label {
+  display: flex;
+  justify-content: space-between;
+}
+
+.control input:not([type='range']) {
+  font: 500 16px var(--mono);
+  color: var(--ink);
+  background: var(--flap);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.control input[aria-invalid='true'] {
+  border-color: var(--signal);
+}
+
+.control input[type='range'] {
+  width: 100%;
+  accent-color: var(--signal);
+}
+
+.control p {
+  font-size: 14px;
+  color: var(--dim);
+  margin: 0;
+}
+
+.control p.error {
+  color: var(--signal);
+}
+
+.snippet {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+@media (max-width: 760px) {
+  .playground {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preview {
+    min-height: 200px;
+  }
+
+  .word {
+    font-size: 32px !important;
+  }
+}
