@@ -1,12 +1,14 @@
 name: Publish
 
-# Pushing a tag like v1.0.5 publishes that version to npm through npm Trusted
-# Publishing (no npm token needed) and creates a GitHub release with the
-# matching CHANGELOG.md section as its notes.
+# Publishes the package.json version to npm through npm Trusted Publishing (no
+# npm token needed) and creates a GitHub release with the matching CHANGELOG.md
+# section as its notes. Start it either by pushing a tag like v1.0.5, or with
+# "Run workflow" on main, which creates the v<version> tag with the release.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -26,14 +28,27 @@ jobs:
       # Trusted Publishing needs npm 11.5.1 or newer.
       - run: npm install -g npm@11
 
-      - name: Check the tag matches package.json
+      - name: Work out the version and tag
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION"
-            exit 1
+          TAG="v$VERSION"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+              echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION"
+              exit 1
+            fi
+          else
+            if [ "$GITHUB_REF" != refs/heads/main ]; then
+              echo "Run this workflow on main, not $GITHUB_REF_NAME"
+              exit 1
+            fi
+            if [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
+              echo "$TAG already exists. Bump the version in package.json first."
+              exit 1
+            fi
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       # Installing runs `prepare`, which rebuilds dist. Under yarn the rebuild
       # is byte-for-byte what is committed, source maps included.
@@ -61,4 +76,5 @@ jobs:
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
+        # Creates the tag at this commit if it does not exist yet.
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
