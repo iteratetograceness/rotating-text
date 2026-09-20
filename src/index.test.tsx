@@ -87,8 +87,41 @@ describe('RotatingText', () => {
       .lastElementChild as HTMLElement
 
     fireEvent.pointerEnter(container.firstElementChild!)
-    await waitFor(() =>
-      expect(flap.style.transform).toContain('rotateX(-180deg)')
+    const angle = () =>
+      Number(/rotateX\((-?[\d.e-]+)deg\)/.exec(flap.style.transform)?.[1])
+    await waitFor(() => expect(angle()).toBeLessThan(-90), { interval: 5 })
+    // Once it settles, it goes back up with the letter on both faces
+    await waitFor(() => expect(flap.style.transform).toBe('rotateX(0deg)'))
+  })
+
+  it('lands every flap on the newest text when it changes mid-flip', async () => {
+    const props = { variant: 'flap', timing: 0.1, stagger: 0.01 } as const
+    const { container, rerender } = render(
+      <RotatingText text='ab' {...props} />
     )
+    const board = container.firstElementChild!
+    fireEvent.pointerEnter(board)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    rerender(<RotatingText text='xyz' {...props} />)
+    rerender(<RotatingText text='no' {...props} />)
+
+    const letters = () =>
+      Array.from(board.children, (tile) =>
+        Array.from(tile.children).map((half) => half.textContent)
+      )
+    const flaps = () =>
+      Array.from(
+        board.children,
+        (tile) => (tile.lastElementChild as HTMLElement).style.transform
+      )
+    // Settled, and back up with the letter on both faces
+    await waitFor(() => {
+      expect(flaps()).toEqual(['rotateX(0deg)', 'rotateX(0deg)'])
+      // sizer, static top, static bottom, then the flap's two faces
+      expect(letters()).toEqual([
+        ['n', 'n', 'n', 'nn'],
+        ['o', 'o', 'o', 'oo']
+      ])
+    })
   })
 })

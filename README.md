@@ -52,7 +52,7 @@ function MyApp() {
 
 ### Split-flap tiles
 
-`variant="flap"` draws every letter on its own tile, split by a seam. On hover or tap the top half of each tile falls over the seam and bounces to rest, like a departures board. A space becomes a blank tile.
+`variant="flap"` draws every letter on its own tile, split by a seam. On hover or tap the top half of each tile falls over the seam and bounces to rest, like a departures board. When `text` changes, each tile flips from its old letter to its new one, so a board can count, cycle words or follow typing; tiles added or removed flip in from blank or out to blank. A space becomes a blank tile. With reduced motion on, letters change in place without flipping.
 
 The tiles are styled with CSS custom properties, set on `className` or `style`:
 

@@ -3,6 +3,52 @@ function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'defau
 var React = require('react');
 var React__default = _interopDefault(React);
 
+function _extends() {
+  _extends = Object.assign ? Object.assign.bind() : function (target) {
+    for (var i = 1; i < arguments.length; i++) {
+      var source = arguments[i];
+      for (var key in source) {
+        if (Object.prototype.hasOwnProperty.call(source, key)) {
+          target[key] = source[key];
+        }
+      }
+    }
+    return target;
+  };
+  return _extends.apply(this, arguments);
+}
+function _unsupportedIterableToArray(o, minLen) {
+  if (!o) return;
+  if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+  var n = Object.prototype.toString.call(o).slice(8, -1);
+  if (n === "Object" && o.constructor) n = o.constructor.name;
+  if (n === "Map" || n === "Set") return Array.from(o);
+  if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+}
+function _arrayLikeToArray(arr, len) {
+  if (len == null || len > arr.length) len = arr.length;
+  for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
+  return arr2;
+}
+function _createForOfIteratorHelperLoose(o, allowArrayLike) {
+  var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
+  if (it) return (it = it.call(o)).next.bind(it);
+  if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+    if (it) o = it;
+    var i = 0;
+    return function () {
+      if (i >= o.length) return {
+        done: true
+      };
+      return {
+        done: false,
+        value: o[i++]
+      };
+    };
+  }
+  throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+}
+
 /**
  * @public
  */
@@ -8738,7 +8784,7 @@ function useAnimationControls() {
     return controls;
 }
 
-var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK"};
+var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK","shadow":"_3IP-G"};
 
 var ROLL_TIMES = [0, 0.64, 0.84, 1];
 var ROLL_EASE = [[0.45, 0, 0.25, 1], [0.4, 0, 0.6, 1], [0.4, 0, 0.6, 1]];
@@ -8752,9 +8798,45 @@ var rollTransform = function rollTransform(_ref) {
 };
 var ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85];
 var ROLL_SHADE = [0, 0.75, 1, 0.75, 0];
-var FLAP_TIMES = [0, 0.6, 0.74, 0.86, 0.93, 1];
-var FLAP_EASE = [[0.55, 0, 0.85, 0.35], [0.2, 0.6, 0.4, 1], [0.6, 0, 0.8, 0.4], [0.2, 0.6, 0.4, 1], [0.6, 0, 0.8, 0.4]];
-var FLAP_FALL = [0, -180, -166, -180, -175, -180];
+var PUSH = 0.25;
+var GRAVITY = 2 * (1 - PUSH);
+var IMPACT = PUSH + GRAVITY;
+var RESTITUTION = 0.27;
+var BOUNCES = [1, 2].map(function (n) {
+  var speed = IMPACT * Math.pow(RESTITUTION, n);
+  return {
+    speed: speed,
+    time: 2 * speed / GRAVITY
+  };
+});
+var SETTLE_TIME = BOUNCES.reduce(function (sum, bounce) {
+  return sum + bounce.time;
+}, 0);
+var FALL_SHARE = 1 / (1 + SETTLE_TIME);
+var BOUNCE_HEIGHT = Math.pow(BOUNCES[0].speed, 2) / (2 * GRAVITY);
+var fallEase = function fallEase(t) {
+  return PUSH * t + GRAVITY / 2 * t * t;
+};
+var settleEase = function settleEase(t) {
+  var s = t * SETTLE_TIME;
+  for (var _iterator = _createForOfIteratorHelperLoose(BOUNCES), _step; !(_step = _iterator()).done;) {
+    var _step$value = _step.value,
+      speed = _step$value.speed,
+      time = _step$value.time;
+    if (s <= time) return (speed * s - GRAVITY / 2 * s * s) / BOUNCE_HEIGHT;
+    s -= time;
+  }
+  return 0;
+};
+var LIGHT = 20 * Math.PI / 180;
+var AMBIENT = 0.4;
+var SHADOW = 0.5;
+var lit = function lit(facing) {
+  return AMBIENT + (1 - AMBIENT) * Math.max(0, facing);
+};
+var shade = function shade(facing) {
+  return Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)));
+};
 var RotatingText = function RotatingText(_ref2) {
   var text = _ref2.text,
     _ref2$timing = _ref2.timing,
@@ -8769,6 +8851,9 @@ var RotatingText = function RotatingText(_ref2) {
   var still = !!prefersReducedMotion;
   var animate = useAnimationControls();
   var busyUntil = React.useRef(0);
+  var _React$useState = React.useState(0),
+    shuffles = _React$useState[0],
+    setShuffles = _React$useState[1];
   var duration = function duration(i) {
     return Array.isArray(timing) ? timing[Math.min(i, timing.length - 1)] : timing;
   };
@@ -8777,13 +8862,20 @@ var RotatingText = function RotatingText(_ref2) {
     return {
       duration: duration(i),
       delay: i * stagger,
-      times: variant === 'flap' ? FLAP_TIMES : ROLL_TIMES,
-      ease: variant === 'flap' ? FLAP_EASE : ROLL_EASE
+      times: ROLL_TIMES,
+      ease: ROLL_EASE
     };
   };
   var flip = function flip() {
+    if (still) return;
+    if (variant === 'flap') {
+      setShuffles(function (n) {
+        return n + 1;
+      });
+      return;
+    }
     var now = performance.now();
-    if (still || now < busyUntil.current) return;
+    if (now < busyUntil.current) return;
     var longest = Math.max.apply(Math, letters.map(function (_, i) {
       return i * stagger + duration(i);
     }));
@@ -8800,17 +8892,12 @@ var RotatingText = function RotatingText(_ref2) {
     } : undefined,
     onHoverStart: flip,
     style: style
-  }, variant === 'flap' ? letters.map(function (_char, i) {
-    return React.createElement(FlapTile, {
-      key: "" + _char + i,
-      "char": _char,
-      fall: still ? undefined : {
-        rotate: {
-          rotateX: FLAP_FALL,
-          transition: transitionFor(i)
-        }
-      }
-    });
+  }, variant === 'flap' ? React.createElement(FlapBoard, {
+    letters: letters,
+    duration: duration,
+    stagger: stagger,
+    shuffles: shuffles,
+    still: still
   }) : React.createElement(RollFaces, {
     letters: letters,
     front: still ? undefined : rollVariant(ROLL_OUT, transitionFor),
@@ -8842,10 +8929,10 @@ var RollFaces = function RollFaces(_ref3) {
     back = _ref3.back;
   return React.createElement(React.Fragment, null, React.createElement("div", {
     className: styles.front
-  }, letters.map(function (_char2, i) {
+  }, letters.map(function (_char, i) {
     return React.createElement(RollLetter, {
-      key: "" + _char2 + i,
-      "char": _char2,
+      key: "" + _char + i,
+      "char": _char,
       index: i,
       variants: front,
       from: 0
@@ -8853,10 +8940,10 @@ var RollFaces = function RollFaces(_ref3) {
   })), React.createElement("div", {
     className: styles.back + " " + styles.copy,
     "aria-hidden": 'true'
-  }, letters.map(function (_char3, i) {
+  }, letters.map(function (_char2, i) {
     return React.createElement(RollLetter, {
-      key: "" + _char3 + i + "copy",
-      "char": _char3,
+      key: "" + _char2 + i + "copy",
+      "char": _char2,
       index: i,
       variants: back,
       from: ROLL_IN[0]
@@ -8866,7 +8953,7 @@ var RollFaces = function RollFaces(_ref3) {
   }, letters.join('')));
 };
 var RollLetter = function RollLetter(_ref4) {
-  var _char4 = _ref4["char"],
+  var _char3 = _ref4["char"],
     index = _ref4.index,
     variants = _ref4.variants,
     from = _ref4.from;
@@ -8881,51 +8968,241 @@ var RollLetter = function RollLetter(_ref4) {
       opacity: opacity
     }),
     transformTemplate: rollTransform
-  }, _char4);
+  }, _char3);
 };
-var FlapTile = function FlapTile(_ref5) {
-  var _char5 = _ref5["char"],
-    fall = _ref5.fall;
-  var rotateX = useMotionValue(0);
-  var frontShade = useTransform(rotateX, [0, -90], [0, 0.55]);
-  var backShade = useTransform(rotateX, [-90, -180], [0.4, 0]);
-  var shadow = useTransform(rotateX, [-60, -150, -180], [0, 0.3, 0]);
+var FlapBoard = function FlapBoard(_ref5) {
+  var letters = _ref5.letters,
+    duration = _ref5.duration,
+    stagger = _ref5.stagger,
+    shuffles = _ref5.shuffles,
+    still = _ref5.still;
+  var _React$useState2 = React.useState(letters.length),
+    slots = _React$useState2[0],
+    setSlots = _React$useState2[1];
+  var count = still ? letters.length : Math.max(slots, letters.length);
+  var _React$useState3 = React.useState(function () {
+      return new Set();
+    }),
+    gone = _React$useState3[0];
+  var length = React.useRef(letters.length);
+  useIsomorphicLayoutEffect(function () {
+    length.current = letters.length;
+    gone.forEach(function (i) {
+      if (i < letters.length) gone["delete"](i);
+    });
+    setSlots(count);
+  }, [count, letters.length]);
+  var mounted = React.useRef(false);
+  React.useEffect(function () {
+    mounted.current = true;
+  }, []);
+  var blank = React.useCallback(function (i) {
+    gone.add(i);
+    setSlots(function (n) {
+      while (n > length.current && gone.has(n - 1)) n--;
+      return n;
+    });
+  }, []);
+  return React.createElement(React.Fragment, null, Array.from({
+    length: count
+  }, function (_, i) {
+    return React.createElement(FlapTile, {
+      key: i,
+      index: i,
+      "char": i < letters.length ? letters[i] : ' ',
+      duration: duration(i),
+      delay: i * stagger,
+      shuffles: shuffles,
+      still: still,
+      enter: mounted.current && !still,
+      onBlank: i < letters.length ? undefined : blank
+    });
+  }));
+};
+var FlapTile = function FlapTile(_ref6) {
+  var _char4 = _ref6["char"],
+    duration = _ref6.duration,
+    delay = _ref6.delay,
+    shuffles = _ref6.shuffles,
+    still = _ref6.still,
+    enter = _ref6.enter,
+    index = _ref6.index,
+    onBlank = _ref6.onBlank;
+  var _React$useState4 = React.useState(function () {
+      var first = enter ? ' ' : _char4;
+      return {
+        from: first,
+        to: first,
+        falling: false,
+        turn: 0,
+        settled: 0
+      };
+    }),
+    faces = _React$useState4[0],
+    setFaces = _React$useState4[1];
+  var shown = React.useRef(faces.to);
+  var wanted = React.useRef(_char4);
+  var busy = React.useRef(false);
+  var falling = React.useRef(false);
+  var wait = React.useRef(0);
+  var bringing = React.useRef(_char4);
+  var running = React.useRef();
+  var seconds = React.useRef(duration);
+  var leave = React.useRef(onBlank);
+  useIsomorphicLayoutEffect(function () {
+    seconds.current = duration >= 0 ? duration : 0.5;
+    leave.current = onBlank;
+  });
+  var flap = React.useRef(null);
+  var frontShade = React.useRef(null);
+  var backShade = React.useRef(null);
+  var shadow = React.useRef(null);
+  var painted = React.useRef(NaN);
+  var paint = function paint(rotateX) {
+    if (!flap.current || rotateX === painted.current) return;
+    painted.current = rotateX;
+    var angle = -rotateX * Math.PI / 180;
+    var facing = Math.cos(angle - LIGHT);
+    flap.current.style.transform = "rotateX(" + rotateX + "deg)";
+    frontShade.current.style.opacity = String(shade(facing));
+    backShade.current.style.opacity = String(shade(-facing));
+    var reach = Math.sin(angle) * Math.tan(LIGHT) - Math.cos(angle);
+    shadow.current.style.transform = "scaleY(" + clamp(0, 1, reach) + ")";
+    shadow.current.style.opacity = String(SHADOW * clamp(0, 1, (180 + rotateX) / 12));
+  };
+  var turn = function turn(delay) {
+    busy.current = true;
+    falling.current = false;
+    wait.current = delay;
+    bringing.current = wanted.current;
+    setFaces(function (f) {
+      return _extends({}, f, {
+        from: shown.current,
+        to: wanted.current,
+        falling: false,
+        turn: f.turn + 1
+      });
+    });
+  };
+  var settle = function settle(letter) {
+    return setFaces(function (f) {
+      return _extends({}, f, {
+        from: letter,
+        to: letter,
+        falling: false,
+        settled: f.settled + 1
+      });
+    });
+  };
+  var restingBlank = function restingBlank() {
+    if (leave.current && shown.current === ' ' && wanted.current === ' ') leave.current(index);
+  };
+  useIsomorphicLayoutEffect(function () {
+    wanted.current = _char4;
+    if (still) {
+      if (running.current) running.current.stop();
+      shown.current = _char4;
+      if (busy.current || faces.from !== _char4 || faces.to !== _char4) settle(_char4);
+    } else if (!busy.current) {
+      if (_char4 !== shown.current) turn(delay);else restingBlank();
+    } else if (!falling.current) {
+      if (_char4 !== shown.current) {
+        bringing.current = _char4;
+        setFaces(function (f) {
+          return _extends({}, f, {
+            to: _char4
+          });
+        });
+      } else {
+        running.current.stop();
+        settle(_char4);
+      }
+    }
+  }, [_char4, still, onBlank]);
+  var shuffled = React.useRef(shuffles);
+  React.useEffect(function () {
+    if (shuffles === shuffled.current) return;
+    shuffled.current = shuffles;
+    if (!busy.current && !leave.current) turn(delay);
+  }, [shuffles]);
+  useIsomorphicLayoutEffect(function () {
+    if (!faces.turn) return;
+    paint(0);
+    var land = function land() {
+      shown.current = bringing.current;
+      setFaces(function (f) {
+        return f.from === f.to ? f : _extends({}, f, {
+          from: f.to
+        });
+      });
+      if (wanted.current !== shown.current) return turn(0);
+      running.current = animate$1(-180, -180 + 180 * BOUNCE_HEIGHT, {
+        duration: seconds.current * (1 - FALL_SHARE),
+        ease: settleEase,
+        onUpdate: paint,
+        onComplete: function onComplete() {
+          return settle(shown.current);
+        }
+      });
+    };
+    running.current = animate$1(0, -180, {
+      duration: seconds.current * FALL_SHARE,
+      delay: wait.current,
+      ease: fallEase,
+      onUpdate: function onUpdate(rotateX) {
+        if (!falling.current && rotateX < 0) {
+          falling.current = true;
+          setFaces(function (f) {
+            return _extends({}, f, {
+              falling: true
+            });
+          });
+        }
+        paint(rotateX);
+      },
+      onComplete: land
+    });
+  }, [faces.turn]);
+  useIsomorphicLayoutEffect(function () {
+    if (!faces.settled) return;
+    paint(0);
+    busy.current = false;
+    if (wanted.current !== shown.current) turn(0);else restingBlank();
+  }, [faces.settled]);
+  React.useEffect(function () {
+    return function () {
+      if (running.current) running.current.stop();
+    };
+  }, []);
+  var was = faces.falling && faces.from !== faces.to ? faces.from : undefined;
   return React.createElement("span", {
     className: styles.tile
   }, React.createElement("span", {
-    className: styles.sizer
-  }, _char5), React.createElement("span", {
+    className: styles.sizer,
+    "data-was": was
+  }, faces.falling ? faces.to : faces.from), React.createElement("span", {
     className: styles.half + " " + styles.top + " " + styles.readable
-  }, _char5), React.createElement("span", {
+  }, faces.to), React.createElement("span", {
     className: styles.half + " " + styles.bottom,
     "aria-hidden": 'true'
-  }, _char5, React.createElement(Shade, {
-    opacity: shadow
-  })), React.createElement(motion.span, {
+  }, faces.from, React.createElement("span", {
+    ref: shadow,
+    className: styles.shade + " " + styles.shadow
+  })), React.createElement("span", {
     "aria-hidden": 'true',
     className: styles.flap,
-    variants: fall,
-    style: motionStyle({
-      rotateX: rotateX
-    })
+    ref: flap
   }, React.createElement("span", {
     className: styles.half + " " + styles.top + " " + styles.leaf
-  }, _char5, React.createElement(Shade, {
-    opacity: frontShade
+  }, faces.from, React.createElement("span", {
+    ref: frontShade,
+    className: styles.shade
   })), React.createElement("span", {
     className: styles.half + " " + styles.bottom + " " + styles.leaf + " " + styles.underside
-  }, _char5, React.createElement(Shade, {
-    opacity: backShade
+  }, faces.to, React.createElement("span", {
+    ref: backShade,
+    className: styles.shade
   }))));
-};
-var Shade = function Shade(_ref6) {
-  var opacity = _ref6.opacity;
-  return React.createElement(motion.span, {
-    className: styles.shade,
-    style: motionStyle({
-      opacity: opacity
-    })
-  });
 };
 
 exports.RotatingText = RotatingText;

@@ -82,6 +82,15 @@
   visibility: hidden;
 }
 
+/* The letter being flipped away, in a line with no height, so it only
+   widens the tile. */
+._2mmHj[data-was]::after {
+  content: attr(data-was);
+  display: block;
+  height: 0;
+  overflow: hidden;
+}
+
 ._1Gz1Q {
   -webkit-user-select: text;
      -moz-user-select: text;
@@ -132,4 +141,13 @@
   background: #000;
   opacity: 0;
   pointer-events: none;
+}
+
+/* The falling flap's shadow on the bottom half grows down from the hinge,
+   with a soft leading edge. */
+._3IP-G {
+  top: 50%;
+  transform: scaleY(0);
+  transform-origin: top;
+  background: linear-gradient(to bottom, #000 70%, transparent);
 }
