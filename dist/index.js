@@ -2719,28 +2719,6 @@ function setTarget(visualElement, definition) {
         setMotionValue(visualElement, key, value);
     }
 }
-function setVariants(visualElement, variantLabels) {
-    const reversedLabels = [...variantLabels].reverse();
-    reversedLabels.forEach((key) => {
-        var _a;
-        const variant = visualElement.getVariant(key);
-        variant && setTarget(visualElement, variant);
-        (_a = visualElement.variantChildren) === null || _a === void 0 ? void 0 : _a.forEach((child) => {
-            setVariants(child, variantLabels);
-        });
-    });
-}
-function setValues(visualElement, definition) {
-    if (Array.isArray(definition)) {
-        return setVariants(visualElement, definition);
-    }
-    else if (typeof definition === "string") {
-        return setVariants(visualElement, [definition]);
-    }
-    else {
-        setTarget(visualElement, definition);
-    }
-}
 function checkTargetForNewValues(visualElement, target, origin) {
     var _a, _b;
     const newValueKeys = Object.keys(target).filter((key) => !visualElement.hasValue(key));
@@ -4263,9 +4241,6 @@ function animateChildren(visualElement, variant, delayChildren = 0, staggerChild
         }).then(() => child.notify("AnimationComplete", variant)));
     });
     return Promise.all(animations);
-}
-function stopAnimation(visualElement) {
-    visualElement.values.forEach((value) => value.stop());
 }
 function sortByTreeOrder(a, b) {
     return a.sortNodePosition(b);
@@ -8700,98 +8675,24 @@ function useReducedMotion() {
     return shouldReduceMotion;
 }
 
-/**
- * @public
- */
-function animationControls() {
-    /**
-     * Track whether the host component has mounted.
-     */
-    let hasMounted = false;
-    /**
-     * A collection of linked component animation controls.
-     */
-    const subscribers = new Set();
-    const controls = {
-        subscribe(visualElement) {
-            subscribers.add(visualElement);
-            return () => void subscribers.delete(visualElement);
-        },
-        start(definition, transitionOverride) {
-            invariant(hasMounted, "controls.start() should only be called after a component has mounted. Consider calling within a useEffect hook.");
-            const animations = [];
-            subscribers.forEach((visualElement) => {
-                animations.push(animateVisualElement(visualElement, definition, {
-                    transitionOverride,
-                }));
-            });
-            return Promise.all(animations);
-        },
-        set(definition) {
-            invariant(hasMounted, "controls.set() should only be called after a component has mounted. Consider calling within a useEffect hook.");
-            return subscribers.forEach((visualElement) => {
-                setValues(visualElement, definition);
-            });
-        },
-        stop() {
-            subscribers.forEach((visualElement) => {
-                stopAnimation(visualElement);
-            });
-        },
-        mount() {
-            hasMounted = true;
-            return () => {
-                hasMounted = false;
-                controls.stop();
-            };
-        },
-    };
-    return controls;
-}
-
-/**
- * Creates `AnimationControls`, which can be used to manually start, stop
- * and sequence animations on one or more components.
- *
- * The returned `AnimationControls` should be passed to the `animate` property
- * of the components you want to animate.
- *
- * These components can then be animated with the `start` method.
- *
- * ```jsx
- * import * as React from 'react'
- * import { motion, useAnimation } from 'framer-motion'
- *
- * export function MyComponent(props) {
- *    const controls = useAnimation()
- *
- *    controls.start({
- *        x: 100,
- *        transition: { duration: 0.5 },
- *    })
- *
- *    return <motion.div animate={controls} />
- * }
- * ```
- *
- * @returns Animation controller with `start` and `stop` methods
- *
- * @public
- */
-function useAnimationControls() {
-    const controls = useConstant(animationControls);
-    useIsomorphicLayoutEffect(controls.mount, []);
-    return controls;
-}
-
 var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK","shadow":"_3IP-G"};
 
-var ROLL_TIMES = [0, 0.64, 0.84, 1];
-var ROLL_EASE = [[0.45, 0, 0.25, 1], [0.4, 0, 0.6, 1], [0.4, 0, 0.6, 1]];
-var ROLL_IN = [90, -7, 2, 0];
-var ROLL_OUT = ROLL_IN.map(function (angle) {
-  return angle - 90;
-});
+var ROLL_DAMPING = 0.65;
+var ROLL_REST = 0.5;
+var rollSpring = function rollSpring(seconds) {
+  var time = seconds > 0 ? seconds : 0.01;
+  var decay = Math.log(90 / ROLL_REST / Math.sqrt(1 - Math.pow(ROLL_DAMPING, 2))) / time;
+  var frequency = decay / ROLL_DAMPING;
+  return {
+    type: 'spring',
+    stiffness: Math.pow(frequency, 2),
+    damping: 2 * decay,
+    mass: 1,
+    velocity: 0,
+    restDelta: ROLL_REST,
+    restSpeed: frequency * ROLL_REST
+  };
+};
 var rollTransform = function rollTransform(_ref) {
   var rotateX = _ref.rotateX;
   return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + ") translateZ(var(--rt-depth))";
@@ -8849,8 +8750,7 @@ var RotatingText = function RotatingText(_ref2) {
     style = _ref2.style;
   var prefersReducedMotion = useReducedMotion();
   var still = !!prefersReducedMotion;
-  var animate = useAnimationControls();
-  var busyUntil = React.useRef(0);
+  var startRoll = React.useRef();
   var _React$useState = React.useState(0),
     shuffles = _React$useState[0],
     setShuffles = _React$useState[1];
@@ -8858,35 +8758,15 @@ var RotatingText = function RotatingText(_ref2) {
     return Array.isArray(timing) ? timing[Math.min(i, timing.length - 1)] : timing;
   };
   var letters = splitLetters(text);
-  var transitionFor = function transitionFor(i) {
-    return {
-      duration: duration(i),
-      delay: i * stagger,
-      times: ROLL_TIMES,
-      ease: ROLL_EASE
-    };
-  };
   var flip = function flip() {
     if (still) return;
-    if (variant === 'flap') {
-      setShuffles(function (n) {
-        return n + 1;
-      });
-      return;
-    }
-    var now = performance.now();
-    if (now < busyUntil.current) return;
-    var longest = Math.max.apply(Math, letters.map(function (_, i) {
-      return i * stagger + duration(i);
-    }));
-    busyUntil.current = now + longest * 1000;
-    animate.start('rotate');
+    if (variant === 'flap') setShuffles(function (n) {
+      return n + 1;
+    });else if (startRoll.current) startRoll.current();
   };
   var rootClass = [styles.container, variant === 'flap' ? styles.board : '', className].filter(Boolean).join(' ');
   return React.createElement(motion.div, {
     className: rootClass,
-    animate: animate,
-    initial: 'initial',
     whileHover: still ? {
       scale: 1.05
     } : undefined,
@@ -8900,8 +8780,9 @@ var RotatingText = function RotatingText(_ref2) {
     still: still
   }) : React.createElement(RollFaces, {
     letters: letters,
-    front: still ? undefined : rollVariant(ROLL_OUT, transitionFor),
-    back: still ? undefined : rollVariant(ROLL_IN, transitionFor)
+    duration: duration,
+    stagger: stagger,
+    startRef: startRoll
   }));
 };
 var motionStyle = function motionStyle(style) {
@@ -8913,55 +8794,78 @@ var splitLetters = function splitLetters(text) {
     return part.segment;
   }) : Array.from(text);
 };
-var rollVariant = function rollVariant(angles, transitionFor) {
-  return {
-    rotate: function rotate(i) {
-      return {
-        rotateX: angles,
-        transition: transitionFor(i)
-      };
-    }
-  };
+var createAngle = function createAngle() {
+  return motionValue(0);
 };
 var RollFaces = function RollFaces(_ref3) {
   var letters = _ref3.letters,
-    front = _ref3.front,
-    back = _ref3.back;
+    duration = _ref3.duration,
+    stagger = _ref3.stagger,
+    startRef = _ref3.startRef;
+  var angles = React.useRef([]).current;
+  while (angles.length < letters.length) angles.push(createAngle());
+  useIsomorphicLayoutEffect(function () {
+    angles.splice(letters.length).forEach(function (a) {
+      return a.stop();
+    });
+    var turning = angles.slice();
+    startRef.current = function () {
+      if (turning.some(function (a) {
+        return a.isAnimating();
+      })) return;
+      turning.forEach(function (angle, i) {
+        return animate$1(angle, -90, _extends({}, rollSpring(duration(i)), {
+          delay: i * stagger,
+          onComplete: function onComplete() {
+            return angle.jump(0);
+          },
+          onStop: function onStop() {
+            return angle.set(0);
+          }
+        }));
+      });
+    };
+  });
+  React.useEffect(function () {
+    return function () {
+      startRef.current = undefined;
+      angles.forEach(function (a) {
+        return a.stop();
+      });
+    };
+  }, []);
   return React.createElement(React.Fragment, null, React.createElement("div", {
     className: styles.front
   }, letters.map(function (_char, i) {
     return React.createElement(RollLetter, {
-      key: "" + _char + i,
+      key: i,
       "char": _char,
-      index: i,
-      variants: front,
-      from: 0
+      angle: angles[i],
+      offset: 0
     });
   })), React.createElement("div", {
     className: styles.back + " " + styles.copy,
     "aria-hidden": 'true'
   }, letters.map(function (_char2, i) {
     return React.createElement(RollLetter, {
-      key: "" + _char2 + i + "copy",
+      key: i,
       "char": _char2,
-      index: i,
-      variants: back,
-      from: ROLL_IN[0]
+      angle: angles[i],
+      offset: 90
     });
   })), React.createElement("div", {
     className: styles.placeholder
   }, letters.join('')));
 };
-var RollLetter = function RollLetter(_ref4) {
+var RollLetter = React.memo(function RollLetter(_ref4) {
   var _char3 = _ref4["char"],
-    index = _ref4.index,
-    variants = _ref4.variants,
-    from = _ref4.from;
-  var rotateX = useMotionValue(from);
+    angle = _ref4.angle,
+    offset = _ref4.offset;
+  var rotateX = useTransform(angle, function (a) {
+    return a + offset;
+  });
   var opacity = useTransform(rotateX, ROLL_SHADE_ANGLES, ROLL_SHADE);
   return React.createElement(motion.span, {
-    custom: index,
-    variants: variants,
     className: styles.face,
     style: motionStyle({
       rotateX: rotateX,
@@ -8969,7 +8873,7 @@ var RollLetter = function RollLetter(_ref4) {
     }),
     transformTemplate: rollTransform
   }, _char3);
-};
+});
 var FlapBoard = function FlapBoard(_ref5) {
   var letters = _ref5.letters,
     duration = _ref5.duration,

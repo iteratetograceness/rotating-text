@@ -11,14 +11,25 @@
   casts a shadow down the bottom half. When `text` changes, each tile flips
   from its old letter to its new one; a change mid-flip is picked up as soon
   as the flap lands. Tiles past the end of shorter text flip to blank before
-  they go, and new tiles flip in from blank. Tile colours and sizes are set
-  with CSS custom properties (see the README).
+  they go, and new tiles flip in from blank. Every tile is as wide as the
+  widest one, so a letter changing doesn't move its neighbours. Tile colours
+  and sizes are set with CSS custom properties (see the README).
 
 ### Changes
 
 - The default roll is now a real 3D turn. Each letter rotates like the face of
   a cube with perspective, dims as it turns away, and settles with a small
   overshoot, instead of shrinking and sliding while it rotates flat.
+- The roll is driven by a damped spring: a letter leaves the moment it is
+  hovered, swings about 6 degrees past the next face and settles within its
+  `timing`. For the same `timing` the turn itself is quicker than before, and
+  the rest of the time goes on settling. The copy on the next face is locked
+  to it, so the two faces can never come apart.
+- Changing `text` while letters are rolling no longer snaps the changed
+  letters back to rest part way through their turn. They keep turning and
+  show the new text, and a letter that comes back later starts at rest.
+- After a flip the letters come to rest on their front faces, so selecting
+  and copying the text works the same before and after a hover.
 - Hovering again while letters are still moving no longer restarts the flip
   from the beginning; the running flip finishes first.
 - With reduced motion on, the text is drawn once instead of as two

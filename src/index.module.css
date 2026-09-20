@@ -35,9 +35,13 @@
 
 /* Split-flap tiles. Colours and sizes come from custom properties so a page
    can restyle the board without reaching into the markup. */
+/* Every tile is as wide as the widest one, like the modules of a real board,
+   so a letter changing never moves the tiles beside it. */
 .board {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: start;
   gap: var(--rt-gap, 0.08em);
 }
 
