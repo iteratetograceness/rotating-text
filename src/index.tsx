@@ -2,11 +2,11 @@ import * as React from 'react'
 import {
   animate as animateValue,
   clamp,
+  transform as interpolate,
   motion,
   motionValue,
   useIsomorphicLayoutEffect,
-  useReducedMotion,
-  useTransform
+  useReducedMotion
 } from 'framer-motion'
 import styles from './index.module.css'
 
@@ -157,13 +157,6 @@ export const RotatingText = ({
   )
 }
 
-type MotionStyle = React.ComponentProps<typeof motion.span>['style']
-
-// framer-motion's style type loses its CSS properties under the TypeScript
-// version this package builds with, so styles holding motion values go
-// through here.
-const motionStyle = (style: object) => style as MotionStyle
-
 // Split into the characters a reader sees, so an accented letter or an emoji
 // with a skin tone stays in one piece.
 const splitLetters = (text: string): string[] => {
@@ -251,24 +244,43 @@ interface RollLetterProps {
   offset: number
 }
 
+// A face dims as it turns away from the viewer, as if lit from the front,
+// and is gone by the time it is edge on.
+const rollShade = interpolate(ROLL_SHADE_ANGLES, ROLL_SHADE)
+const rollStyle = (rotateX: number) => ({
+  transform: rollTransform({ rotateX: `${rotateX}deg` }),
+  opacity: String(rollShade(rotateX))
+})
+
+// A plain span that follows its angle by writing its own style, so a turning
+// letter costs no React work per frame and a text change re-renders only the
+// letters whose character changed.
 const RollLetter = React.memo(function RollLetter({
   char,
   angle,
   offset
 }: RollLetterProps) {
-  const rotateX = useTransform(angle, (a) => a + offset)
-  // A face dims as it turns away from the viewer, as if lit from the front,
-  // and is gone by the time it is edge on.
-  const opacity = useTransform(rotateX, ROLL_SHADE_ANGLES, ROLL_SHADE)
+  const face = React.useRef<HTMLSpanElement>(null)
+
+  useIsomorphicLayoutEffect(() => {
+    const follow = (a: number) => {
+      const { transform, opacity } = rollStyle(a + offset)
+      face.current!.style.transform = transform
+      face.current!.style.opacity = opacity
+    }
+    follow(angle.get())
+    return angle.on('change', follow)
+  }, [angle, offset])
+
+  // Drawn at rest to start with, so server-rendered markup has the face in
+  // place before the effect takes over. React leaves the style alone after
+  // that, because it never changes between renders.
+  const rest = React.useMemo(() => rollStyle(offset), [offset])
 
   return (
-    <motion.span
-      className={styles.face}
-      style={motionStyle({ rotateX, opacity })}
-      transformTemplate={rollTransform}
-    >
+    <span className={styles.face} ref={face} style={rest}>
       {char}
-    </motion.span>
+    </span>
   )
 })
 

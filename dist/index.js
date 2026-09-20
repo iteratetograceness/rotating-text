@@ -8532,38 +8532,6 @@ const featureBundle = {
  */
 const motion = /*@__PURE__*/ createMotionProxy((Component, config) => createDomMotionConfig(Component, config, featureBundle, createDomVisualElement, HTMLProjectionNode));
 
-/**
- * Creates a `MotionValue` to track the state and velocity of a value.
- *
- * Usually, these are created automatically. For advanced use-cases, like use with `useTransform`, you can create `MotionValue`s externally and pass them into the animated component via the `style` prop.
- *
- * ```jsx
- * export const MyComponent = () => {
- *   const scale = useMotionValue(1)
- *
- *   return <motion.div style={{ scale }} />
- * }
- * ```
- *
- * @param initial - The initial state.
- *
- * @public
- */
-function useMotionValue(initial) {
-    const value = useConstant(() => motionValue(initial));
-    /**
-     * If this motion value is being used in static mode, like on
-     * the Framer canvas, force components to rerender when the motion
-     * value is updated.
-     */
-    const { isStatic } = React.useContext(MotionConfigContext);
-    if (isStatic) {
-        const [, setLatest] = React.useState(initial);
-        React.useEffect(() => value.on("change", setLatest), []);
-    }
-    return value;
-}
-
 const isCustomValueType = (v) => {
     return typeof v === "object" && v.mix;
 };
@@ -8580,58 +8548,6 @@ function transform(...args) {
         ...options,
     });
     return useImmediate ? interpolator(inputValue) : interpolator;
-}
-
-function useCombineMotionValues(values, combineValues) {
-    /**
-     * Initialise the returned motion value. This remains the same between renders.
-     */
-    const value = useMotionValue(combineValues());
-    /**
-     * Create a function that will update the template motion value with the latest values.
-     * This is pre-bound so whenever a motion value updates it can schedule its
-     * execution in Framesync. If it's already been scheduled it won't be fired twice
-     * in a single frame.
-     */
-    const updateValue = () => value.set(combineValues());
-    /**
-     * Synchronously update the motion value with the latest values during the render.
-     * This ensures that within a React render, the styles applied to the DOM are up-to-date.
-     */
-    updateValue();
-    /**
-     * Subscribe to all motion values found within the template. Whenever any of them change,
-     * schedule an update.
-     */
-    useIsomorphicLayoutEffect(() => {
-        const scheduleUpdate = () => sync.update(updateValue, false, true);
-        const subscriptions = values.map((v) => v.on("change", scheduleUpdate));
-        return () => {
-            subscriptions.forEach((unsubscribe) => unsubscribe());
-            cancelSync.update(updateValue);
-        };
-    });
-    return value;
-}
-
-function useTransform(input, inputRangeOrTransformer, outputRange, options) {
-    const transformer = typeof inputRangeOrTransformer === "function"
-        ? inputRangeOrTransformer
-        : transform(inputRangeOrTransformer, outputRange, options);
-    return Array.isArray(input)
-        ? useListTransform(input, transformer)
-        : useListTransform([input], ([latest]) => transformer(latest));
-}
-function useListTransform(values, transformer) {
-    const latest = useConstant(() => []);
-    return useCombineMotionValues(values, () => {
-        latest.length = 0;
-        const numValues = values.length;
-        for (let i = 0; i < numValues; i++) {
-            latest[i] = values[i].get();
-        }
-        return transformer(latest);
-    });
 }
 
 /**
@@ -8785,9 +8701,6 @@ var RotatingText = function RotatingText(_ref2) {
     startRef: startRoll
   }));
 };
-var motionStyle = function motionStyle(style) {
-  return style;
-};
 var splitLetters = function splitLetters(text) {
   var Segmenter = Intl.Segmenter;
   return Segmenter ? Array.from(new Segmenter().segment(text), function (part) {
@@ -8857,21 +8770,38 @@ var RollFaces = function RollFaces(_ref3) {
     className: styles.placeholder
   }, letters.join('')));
 };
+var rollShade = transform(ROLL_SHADE_ANGLES, ROLL_SHADE);
+var rollStyle = function rollStyle(rotateX) {
+  return {
+    transform: rollTransform({
+      rotateX: rotateX + "deg"
+    }),
+    opacity: String(rollShade(rotateX))
+  };
+};
 var RollLetter = React.memo(function RollLetter(_ref4) {
   var _char3 = _ref4["char"],
     angle = _ref4.angle,
     offset = _ref4.offset;
-  var rotateX = useTransform(angle, function (a) {
-    return a + offset;
-  });
-  var opacity = useTransform(rotateX, ROLL_SHADE_ANGLES, ROLL_SHADE);
-  return React.createElement(motion.span, {
+  var face = React.useRef(null);
+  useIsomorphicLayoutEffect(function () {
+    var follow = function follow(a) {
+      var _rollStyle = rollStyle(a + offset),
+        transform = _rollStyle.transform,
+        opacity = _rollStyle.opacity;
+      face.current.style.transform = transform;
+      face.current.style.opacity = opacity;
+    };
+    follow(angle.get());
+    return angle.on('change', follow);
+  }, [angle, offset]);
+  var rest = React.useMemo(function () {
+    return rollStyle(offset);
+  }, [offset]);
+  return React.createElement("span", {
     className: styles.face,
-    style: motionStyle({
-      rotateX: rotateX,
-      opacity: opacity
-    }),
-    transformTemplate: rollTransform
+    ref: face,
+    style: rest
   }, _char3);
 });
 var FlapBoard = function FlapBoard(_ref5) {
