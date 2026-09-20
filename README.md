@@ -40,17 +40,49 @@ function MyApp() {
 
 ### Props
 
-| Prop        | Type                   | Default     | Description                                                          |
-| ----------- | ---------------------- | ----------- | -------------------------------------------------------------------- |
-| `text`      | `string`               | (required)  | Text to animate.                                                     |
-| `stagger`   | `number`               | `0.1`       | Seconds between each letter starting its animation.                  |
-| `timing`    | `number \| number[]`   | `0.5`       | Seconds each letter's animation lasts, or one duration per letter.   |
-| `className` | `string`               | `undefined` | Class name added to the outer container.                             |
-| `style`     | `React.CSSProperties`  | `undefined` | Inline styles applied to the outer container.                        |
+| Prop        | Type                  | Default     | Description                                                               |
+| ----------- | --------------------- | ----------- | ------------------------------------------------------------------------- |
+| `text`      | `string`              | (required)  | Text to animate.                                                          |
+| `stagger`   | `number`              | `0.1`       | Seconds between each letter starting its animation.                       |
+| `timing`    | `number \| number[]`  | `0.5`       | Seconds each letter's animation lasts, or one duration per letter.        |
+| `variant`   | `'roll' \| 'flap'`    | `'roll'`    | `roll` turns each letter over like a cube; `flap` draws split-flap tiles. |
+| `className` | `string`              | `undefined` | Class name added to the outer container.                                  |
+| `style`     | `React.CSSProperties` | `undefined` | Inline styles applied to the outer container.                             |
+
+### Split-flap tiles
+
+`variant="flap"` draws every letter on its own tile, split by a seam. On hover or tap the top half of each tile falls over the seam and bounces to rest, like a departures board. A space becomes a blank tile.
+
+The tiles are styled with CSS custom properties, set on `className` or `style`:
+
+| Property           | Default             | Description                                    |
+| ------------------ | ------------------- | ---------------------------------------------- |
+| `--rt-tile`        | `#1d1d1f`           | Tile background.                               |
+| `--rt-ink`         | inherited           | Letter colour.                                 |
+| `--rt-seam`        | `#000`              | Colour of the seam across the middle.          |
+| `--rt-seam-width`  | `max(1px, 0.012em)` | Height of the seam.                            |
+| `--rt-gap`         | `0.08em`            | Space between tiles.                           |
+| `--rt-radius`      | `0.06em`            | Tile corner radius.                            |
+| `--rt-padding`     | `0.08em 0.1em`      | Space around each letter inside its tile.      |
+| `--rt-tile-width`  | `0.62em`            | Minimum tile width, so narrow letters line up. |
+| `--rt-perspective` | `3.5em`             | Depth of the flap's 3D fall.                   |
+
+```tsx
+<RotatingText text='Departures' variant='flap' className='board' />
+```
+
+```css
+.board {
+  font-size: 80px;
+  --rt-tile: #182139;
+  --rt-ink: #f1ece1;
+}
+```
 
 ## Notes
 
-1. Text wrapping is currently not supported. RotatingText works best with a single word or short phrase, as spaces are ignored.
+1. Text wrapping is currently not supported. RotatingText works best with a single word or short phrase, as spaces are ignored (in the `flap` variant a space is a blank tile).
+2. The text flips when the pointer moves onto it, which on a touch screen is a tap. A flip always runs to the end; hovering again mid-flip does nothing.
 
 ## License
 
