@@ -441,7 +441,7 @@ var useHover = function useHover(ref, onHoverStart, scale) {
   }, []);
 };
 
-var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK","shadow":"_3IP-G"};
+var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","text":"_32Dfs","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK","shadow":"_3IP-G"};
 
 var ROLL_DAMPING = 0.65;
 var ROLL_REST = 0.5;
@@ -733,7 +733,11 @@ var RollFaces = function RollFaces(_ref2) {
     };
   }, []);
   return createElement(Fragment, null, createElement("div", {
+    className: styles.text,
+    ref: width.text
+  }, word), createElement("div", {
     className: styles.front,
+    "aria-hidden": 'true',
     ref: width.front
   }, next.front.map(function (_char5, i) {
     return createElement(RollLetter, {
@@ -743,7 +747,7 @@ var RollFaces = function RollFaces(_ref2) {
       offset: 0
     });
   })), createElement("div", {
-    className: styles.back + " " + styles.copy,
+    className: styles.back,
     "aria-hidden": 'true',
     ref: width.back
   }, next.back.map(function (_char6, i) {
@@ -798,6 +802,7 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
   var placeholder = useRef(null);
   var front = useRef(null);
   var back = useRef(null);
+  var text = useRef(null);
   var _React$useState5 = useState(function () {
       return motionValue(0);
     }),
@@ -826,6 +831,7 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
       var el = _arr[_i2];
       if (el) el.style.width = el.style.clipPath = '';
     }
+    if (text.current) text.current.style.pointerEvents = '';
   };
   useIsomorphicLayoutEffect(function () {
     if (still) {
@@ -862,6 +868,7 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
       paint(to);
       return;
     }
+    if (to > from) text.current.style.pointerEvents = 'none';
     var velocity = eased.isAnimating() ? eased.getVelocity() : 0;
     if (!eased.isAnimating()) eased.jump(from);
     paint(eased.get());
@@ -891,7 +898,8 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
   return {
     placeholder: placeholder,
     front: front,
-    back: back
+    back: back,
+    text: text
   };
 };
 var rollShade = transform(ROLL_SHADE_ANGLES, ROLL_SHADE);

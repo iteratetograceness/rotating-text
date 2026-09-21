@@ -278,7 +278,7 @@ const RollFaces = ({
     const i = angles.indexOf(angle)
     if (i >= 0 && faces.front[i] === faces.back[i] && !moved.has(angle)) {
       // It turned over itself, as on a hover. Put its front face back, which
-      // looks the same, so selecting text and the next flip start from there.
+      // looks the same, so the next flip starts from there.
       if (angle.get() !== 0) angle.jump(0)
     }
     // If the text changed while letters turned, the ones now free of it turn
@@ -423,16 +423,15 @@ const RollFaces = ({
 
   return (
     <React.Fragment>
-      <div className={styles.front} ref={width.front}>
+      <div className={styles.text} ref={width.text}>
+        {word}
+      </div>
+      <div className={styles.front} aria-hidden='true' ref={width.front}>
         {next.front.map((char, i) => (
           <RollLetter key={i} char={char} angle={angles[i]} offset={0} />
         ))}
       </div>
-      <div
-        className={`${styles.back} ${styles.copy}`}
-        aria-hidden='true'
-        ref={width.back}
-      >
+      <div className={styles.back} aria-hidden='true' ref={width.back}>
         {next.back.map((char, i) => (
           <RollLetter key={i} char={char} angle={angles[i]} offset={90} />
         ))}
@@ -520,6 +519,7 @@ const useEasedWidth = (
   const placeholder = React.useRef<HTMLDivElement>(null)
   const front = React.useRef<HTMLDivElement>(null)
   const back = React.useRef<HTMLDivElement>(null)
+  const text = React.useRef<HTMLDivElement>(null)
   const [eased] = React.useState(() => motionValue(0))
   // The placeholder's width, kept current as fonts load or the page
   // restyles, so a change eases from the width that was really on screen
@@ -551,6 +551,7 @@ const useEasedWidth = (
     for (const el of [placeholder.current, front.current, back.current]) {
       if (el) el.style.width = el.style.clipPath = ''
     }
+    if (text.current) text.current.style.pointerEvents = ''
   }
 
   useIsomorphicLayoutEffect(() => {
@@ -592,6 +593,11 @@ const useEasedWidth = (
       paint(to)
       return
     }
+    // The text under the letters is already the new word's width, so while
+    // the roll widens it reaches over the text beside it. It lets pointers
+    // through to that text meanwhile. Cutting it off with the letters
+    // instead would re-raster it every frame.
+    if (to > from) text.current!.style.pointerEvents = 'none'
     const velocity = eased.isAnimating() ? eased.getVelocity() : 0
     if (!eased.isAnimating()) eased.jump(from)
     paint(eased.get())
@@ -625,7 +631,7 @@ const useEasedWidth = (
     }
   }, [])
 
-  return { placeholder, front, back }
+  return { placeholder, front, back, text }
 }
 
 interface RollLetterProps {

@@ -3,16 +3,76 @@
   width: max-content;
 }
 
+/* The rows of turning letters are only drawn. They stay out of selection,
+   and pointers pass through them to .text underneath, so a drag over the
+   letters selects the text from the letter under the pointer. */
 .front,
 .back {
   display: flex;
   position: absolute;
+  pointer-events: none;
+  user-select: none;
 }
 
-/* Copies drawn only for the animation stay out of text selection, so
-   copying the text gives each letter once. */
-.copy {
-  user-select: none;
+/* The text as it is now, from the moment it changes, while the front faces
+   may still show the letters they are turning away from. It lies under the
+   letters, the size of the word, and is what screen readers read and what
+   a selection copies. Its glyphs are never drawn, whatever colours the page
+   gives text, so the letters show through, selected or not. Out of flow, it
+   takes up no room and no underline from around the roll reaches it. */
+.text {
+  position: absolute;
+  white-space: pre;
+  /* Laid out like the letters, each in its own box, so it lines up with
+     them letter for letter */
+  font-kerning: none;
+  font-variant-ligatures: none;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  -webkit-text-stroke-width: 0 !important;
+  text-shadow: none !important;
+  forced-color-adjust: none;
+}
+
+/* Selected, linked to or found, text is drawn in other colours. One rule
+   each, since a browser drops a whole rule over a pseudo-element it lacks. */
+.text::selection {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+}
+
+.text::target-text {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+}
+
+.text::search-text {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+}
+
+/* A highlight given a colour also loses its background unless something
+   gives it one. These give the usual ones, or --rt-selection. In a layer,
+   they give way to any ::selection rule of the page's own. */
+@layer rotating-text {
+  .text::selection {
+    background-color: var(--rt-selection, Highlight);
+  }
+
+  .text::target-text {
+    background-color: Mark;
+  }
+}
+
+/* The letters keep their colour when selected, which forced colours can't
+   be sure contrasts with the highlight, so there is none */
+@media (forced-colors: active) {
+  .text::selection {
+    background-color: transparent;
+  }
 }
 
 /* Each letter turns about an axis half a line behind it, like the face of a

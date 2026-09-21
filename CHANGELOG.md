@@ -10,6 +10,14 @@
   `dist/index.modern.js` drops from 346 KB (84 KB gzipped) to 37 KB (10 KB
   gzipped), and mounting takes 16 to 35% less main-thread time. React is
   still the only dependency.
+- The roll's text is read by screen readers and selected and copied as the
+  new text from the moment `text` changes, rather than the old text until
+  every letter has landed. It is read and copied as one word, where it used
+  to come a letter at a time, and a drag or double-click over the letters
+  now selects them like ordinary text. The text sits unseen under the
+  letters, which are only drawn, so the motion is unchanged. A selection's
+  highlight is drawn behind the letters, which keep their own colour; set
+  `--rt-selection` to give it a colour of your own.
 
 ### Fixes
 
