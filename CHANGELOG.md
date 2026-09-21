@@ -17,6 +17,8 @@
   letter that has already started turning into view. React can commit such a
   render well after it ran; if letters have moved on in the meantime, the roll
   renders again from where they are before the frame is painted.
+- A flap tile whose side falls between two device pixels no longer darkens
+  that outer pixel column while the falling flap's shadow passes over it.
 
 ## 1.1.0 (2026-09-21)
 

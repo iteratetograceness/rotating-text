@@ -944,7 +944,9 @@ const FlapTile = ({
       </span>
       <span className={`${styles.half} ${styles.bottom}`} aria-hidden='true'>
         {faces.from}
-        <span ref={shadow} className={styles.shadow} />
+        <span className={styles.shade}>
+          <span ref={shadow} className={styles.shadow} />
+        </span>
       </span>
       <span aria-hidden='true' className={styles.flap} ref={flap}>
         <span

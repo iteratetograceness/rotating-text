@@ -168,12 +168,29 @@
   transform: rotateX(180deg);
 }
 
-/* The falling flap's shadow on the bottom half grows down from the hinge,
-   with a soft leading edge. While the flap turns it has a layer of its
-   own, so growing and fading it never repaints the tile. */
-.shadow {
+/* Clips the shadow to the bottom half along the same lines as .bottom. The
+   corners too small to see make it a mask, anti-aliased like the half's own
+   edges; a plain rectangle would clip the shadow's layer to whole pixels,
+   and on a tile whose side falls between pixels the shadow would then
+   darken the page beside the tile. It stays on at rest: switching it on
+   for each turn lays out and repaints every tile. */
+.shade {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+  clip-path: inset(
+    calc(50% + var(--rt-seam-width, max(1px, 0.012em)) / 2) 0 0 0 round 0.001px
+  );
+}
+
+/* The falling flap's shadow on the bottom half grows down from the hinge,
+   with a soft leading edge. While the flap turns it has a layer of its
+   own, so growing and fading it never repaints the tile. It overhangs the
+   sides, so the edge you see is the clip's even while its layer is still
+   drawn small. */
+.shadow {
+  position: absolute;
+  inset: 0 -1px;
   top: 50%;
   opacity: 0;
   pointer-events: none;

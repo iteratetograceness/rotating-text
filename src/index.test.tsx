@@ -719,6 +719,33 @@ describe('RotatingText', () => {
     expect(tiles.some((tile) => tile.hasAttribute('data-turning'))).toBe(false)
   })
 
+  // A plain rectangle clips the shadow's own layer to whole pixels, so on a
+  // tile whose side falls between pixels the shadow darkens the page beside
+  // it. The shadow sits in a clip along the bottom half's own lines, drawn
+  // as an anti-aliased mask, and overhangs it so the clip's edge is the one
+  // that shows.
+  it("clips the flap's shadow along the bottom half's edges", () => {
+    const css = readFileSync(join(__dirname, 'index.module.css'), 'utf8')
+    const rule = (selector: string) =>
+      css
+        .match(new RegExp(`\\n\\${selector} \\{([^}]*)\\}`))?.[1]
+        .replace(/\s+/g, ' ')
+    const inset = (clip: string) => clip.match(/inset\( ?(.*?) 0 0 0/)?.[1]
+    const bottom = rule('.bottom')!.match(/clip-path: ([^;]*);/)![1]
+    const shade = rule('.shade')!.match(/clip-path: ([^;]*);/)![1]
+    expect(inset(shade)).toBe(inset(bottom))
+    expect(shade).toMatch(/ round /)
+    expect(rule('.shadow')).toMatch(/inset: 0 -1px;/)
+
+    const { container } = render(<RotatingText text='hi' variant='flap' />)
+    const tiles = Array.from(container.firstElementChild!.children)
+    for (const tile of tiles) {
+      const shadow = tile.querySelector('[class*=shadow]')!
+      expect(shadow.parentElement!.className).toMatch(/shade/)
+      expect(shadow.parentElement!.parentElement!.className).toMatch(/bottom/)
+    }
+  })
+
   it('lands every flap on the newest text when it changes mid-flip', async () => {
     const props = { variant: 'flap', timing: 0.1, stagger: 0.01 } as const
     const { container, rerender } = render(
