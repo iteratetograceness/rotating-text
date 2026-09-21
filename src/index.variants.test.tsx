@@ -1,55 +1,35 @@
 import * as React from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { animate, spring, useReducedMotion } from 'framer-motion'
+import { spring } from 'framer-motion'
+import { animate, useReducedMotion } from './motion'
 import { RotatingText } from '.'
 
-// Replace motion.div with a plain element that remembers the
-// motion props it was given, so tests can inspect variants directly.
+// Remember what each element was given to do on hover, so tests can start a
+// hover directly and see whether it scales
 const { propsOf } = vi.hoisted(() => {
   const props = new WeakMap<Element, Record<string, any>>()
   return { propsOf: props }
 })
 
-vi.mock('framer-motion', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('framer-motion')>()
-  const stub = (Tag: 'div') =>
-    function MotionStub({
-      variants,
-      custom,
-      animate,
-      initial,
-      whileHover,
-      onHoverStart,
-      style,
-      ...rest
-    }: Record<string, any>) {
-      const motionProps = { variants, custom, whileHover, onHoverStart }
-      // Motion values can't be rendered by a plain element, so drop them
-      const plainStyle =
-        style &&
-        Object.fromEntries(
-          Object.entries(style).filter(([, value]) => typeof value !== 'object')
-        )
-      return (
-        <Tag
-          {...rest}
-          style={plainStyle}
-          ref={(el: Element | null) => el && propsOf.set(el, motionProps)}
-        />
-      )
-    }
+vi.mock('./motion', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./motion')>()
   return {
     ...actual,
-    motion: { div: stub('div') },
+    useHover: (
+      ref: React.RefObject<HTMLElement>,
+      onHoverStart: () => void,
+      scale?: number
+    ) =>
+      actual.useIsomorphicLayoutEffect(() => {
+        propsOf.set(ref.current!, { onHoverStart, scale })
+      }),
     useReducedMotion: vi.fn(() => false),
     // Records every call. A rolling letter's turn (on its angle) runs; a
     // flap's (from a plain number) is held, so tests step it by calling its
     // onUpdate and onComplete
     animate: vi.fn((...args: Parameters<typeof actual.animate>) =>
-      typeof args[0] === 'number'
-        ? { stop: vi.fn(), isAnimating: () => false }
-        : actual.animate(...args)
+      typeof args[0] === 'number' ? { stop: vi.fn() } : actual.animate(...args)
     )
   }
 })
@@ -83,11 +63,6 @@ const placeholder = (container: HTMLElement) =>
 const root = (container: HTMLElement) => container.firstElementChild!
 const letters = (container: HTMLElement) =>
   Array.from(container.querySelectorAll('span'))
-// Elements that animate when the component flips
-const movers = (container: HTMLElement) =>
-  Array.from(container.querySelectorAll('span')).filter(
-    (el) => propsOf.get(el)?.variants
-  )
 const hover = (container: HTMLElement) =>
   act(() => propsOf.get(root(container))!.onHoverStart())
 // Each flap's animate() call as [from, to, options]
@@ -111,8 +86,9 @@ const turns = () =>
 const eases = () =>
   vi.mocked(animate).mock.calls.filter(([, target]) => target !== -90)
 
-// Runs a letter's turn through framer-motion's own spring, so the angles
-// and the moment it counts as settled are the ones the component gets
+// Runs a letter's turn through framer-motion's own spring, which ./motion
+// reproduces, so the angles and the moment it counts as settled are the
+// ones the component gets
 const simulate = ({ type, delay, onComplete, onStop, ...turn }: any) => {
   const generator = spring({ ...turn, keyframes: [0, -90] })
   const angles: number[] = []
@@ -571,10 +547,9 @@ describe('RotatingText', () => {
     vi.mocked(useReducedMotion).mockReturnValue(true)
     const { container } = render(<RotatingText text='abc' variant='flap' />)
 
-    expect(movers(container)).toHaveLength(0)
     // Same markup either way, so server and client renders always match
     expect(container.innerHTML).toBe(markup)
-    expect(propsOf.get(root(container))!.whileHover).toEqual({ scale: 1.05 })
+    expect(propsOf.get(root(container))!.scale).toBe(1.05)
   })
 
   it('does not start a flip on hover when reduced motion is preferred', () => {
@@ -591,7 +566,7 @@ describe('RotatingText', () => {
 
     hover(container)
     expect(animate).not.toHaveBeenCalled()
-    expect(propsOf.get(root(container))!.whileHover).toEqual({ scale: 1.05 })
+    expect(propsOf.get(root(container))!.scale).toBe(1.05)
   })
 
   it('turns letters and has no hover scale when reduced motion is not preferred', () => {
@@ -599,7 +574,7 @@ describe('RotatingText', () => {
 
     hover(container)
     expect(turns()).toHaveLength(3)
-    expect(propsOf.get(root(container))!.whileHover).toBeUndefined()
+    expect(propsOf.get(root(container))!.scale).toBeUndefined()
   })
 
   it('applies className only when provided', () => {

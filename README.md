@@ -1,7 +1,7 @@
 # Rotating Text
 
 > Customizable 3D text hover animation.
-> Created using Framer Motion.
+> Moves on Framer Motion's springs, built in, so React is its only dependency.
 > Respects user's Reduced Motion preferences.
 
 **[See it live at rotating-text.vercel.app](https://rotating-text.vercel.app/)**, with a playground to try every prop on desktop, tablet or phone.
