@@ -21,6 +21,8 @@
   --rt-depth: 0.55em;
   display: inline-block;
   backface-visibility: hidden;
+  /* A space alone in its box would otherwise collapse to nothing */
+  white-space: pre;
 }
 
 @supports (height: 1lh) {
@@ -29,8 +31,11 @@
   }
 }
 
+/* Keeps every space, like the letters it stands in for, and stays on one
+   line even while it is held narrower than its text */
 .placeholder {
   visibility: hidden;
+  white-space: pre;
 }
 
 /* Split-flap tiles. Colours and sizes come from custom properties so a page
