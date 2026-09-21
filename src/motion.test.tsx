@@ -1,4 +1,6 @@
+import * as React from 'react'
 import * as framer from 'framer-motion'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as motion from './motion'
 
@@ -18,7 +20,18 @@ beforeEach(() => {
     return queue.length
   })
 })
-afterEach(() => vi.restoreAllMocks())
+// Frames still asked for run out, so both frame loops are idle for the next
+// test even when this one failed part way
+afterEach(() => {
+  cleanup()
+  for (let i = 0; queue.length && i < 5000; i++) {
+    clock += 1000 / 60
+    const callbacks = queue
+    queue = []
+    callbacks.forEach((callback) => callback(clock))
+  }
+  vi.restoreAllMocks()
+})
 
 // Runs frames `gaps` ms apart until nothing asks for another, letting
 // promises settle between frames as a browser would
@@ -223,6 +236,85 @@ describe('motion', () => {
         onStop: () => log('stop')
       })
     }))
+
+  it('scales on hover as motion.div does with whileHover', async () => {
+    // jsdom has no PointerEvent, so a mouse event stands in for one
+    const pointer = (
+      el: Element,
+      type: 'pointerenter' | 'pointerleave',
+      { pointerType = 'mouse', button = 0, isPrimary = true } = {}
+    ) => {
+      const event = new MouseEvent(type, { button })
+      Object.defineProperties(event, {
+        pointerType: { value: pointerType },
+        isPrimary: { value: isPrimary }
+      })
+      act(() => {
+        el.dispatchEvent(event)
+      })
+    }
+    // What each element does, frame by frame, as the pointer comes and goes
+    const drive = async (el: Element, started: () => number) => {
+      clock = 1000
+      const seen: [string, string, number][] = []
+      const frames = async (label: string, n: number) => {
+        for (let i = 0; i < n; i++) {
+          clock += 1000 / 60
+          const callbacks = queue
+          queue = []
+          callbacks.forEach((callback) => callback(clock))
+          await Promise.resolve()
+          seen.push([label, (el as HTMLElement).style.transform, started()])
+        }
+      }
+      pointer(el, 'pointerleave')
+      await frames('leave with no enter', 3)
+      pointer(el, 'pointerenter')
+      await frames('enter', 8)
+      pointer(el, 'pointerleave')
+      await frames('leave mid-way', 40)
+      pointer(el, 'pointerenter', { button: 2 })
+      await frames('right button', 3)
+      pointer(el, 'pointerenter', { pointerType: 'touch', isPrimary: false })
+      await frames('second finger', 3)
+      pointer(el, 'pointerenter', { pointerType: 'touch' })
+      await frames('tap', 40)
+      pointer(el, 'pointerenter')
+      await frames('enter again', 5)
+      pointer(el, 'pointerleave')
+      await frames('leave', 40)
+      return seen
+    }
+
+    let theirStarts = 0
+    const theirs = render(
+      <framer.motion.div
+        whileHover={{ scale: 1.05 }}
+        onHoverStart={() => theirStarts++}
+      />
+    )
+    const framerFrames = await drive(
+      theirs.container.firstElementChild!,
+      () => theirStarts
+    )
+    theirs.unmount()
+
+    let ourStarts = 0
+    const Ours = () => {
+      const ref = React.useRef<HTMLDivElement>(null)
+      motion.useHover(ref, () => ourStarts++, 1.05)
+      return <div ref={ref} />
+    }
+    const ours = render(<Ours />)
+    const ourFrames = await drive(
+      ours.container.firstElementChild!,
+      () => ourStarts
+    )
+
+    expect(framerFrames.some(([, t]) => t.startsWith('scale(1.04'))).toBe(true)
+    expect(framerFrames[framerFrames.length - 1][1]).toBe('none')
+    expect(ourFrames).toEqual(framerFrames)
+  })
 
   it('maps numbers between ranges as transform in framer does', () => {
     const input = [-85, -60, 0, 60, 85]

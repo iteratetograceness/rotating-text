@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changes
+
+- framer-motion is no longer bundled into the package. The few parts of it the
+  component used (its frame loop, spring and tween, and hover) are ported into
+  `src/motion.ts` with the same arithmetic, so every frame renders as before.
+  `dist/index.modern.js` drops from 346 KB (84 KB gzipped) to 37 KB (10 KB
+  gzipped), and mounting takes 16 to 35% less main-thread time. React is
+  still the only dependency.
+
 ## 1.1.0 (2026-09-21)
 
 ### Features

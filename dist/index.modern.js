@@ -272,7 +272,7 @@ var spring = function spring(origin, target, _ref3) {
 var tween = function tween(origin, target, _ref4) {
   var duration = _ref4.duration,
     ease = _ref4.ease;
-  var along = interpolate([0 * duration, 1 * duration], [origin, target], [ease]);
+  var along = transform([0 * duration, 1 * duration], [origin, target], [ease]);
   return function (t) {
     return {
       value: along(t),
@@ -338,7 +338,7 @@ var progress = function progress(from, to, value) {
   var toFromDifference = to - from;
   return toFromDifference === 0 ? 1 : (value - from) / toFromDifference;
 };
-var interpolate = function interpolate(input, output, ease) {
+var transform = function transform(input, output, ease) {
   var inputLength = input.length;
   if (input[0] > input[inputLength - 1]) {
     input = [].concat(input).reverse();
@@ -364,9 +364,6 @@ var interpolate = function interpolate(input, output, ease) {
     }
     return mixers[i](progress(input[i], input[i + 1], v));
   };
-};
-var transform = function transform(input, output) {
-  return interpolate(input, output);
 };
 var useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 var prefersReducedMotion = {
@@ -410,13 +407,15 @@ var useHover = function useHover(ref, onHoverStart, scale) {
   useEffect(function () {
     var el = ref.current;
     var size = new MotionValue(1);
+    var hovered = false;
     var hover = function hover(active) {
       return function (event) {
         if (!isPrimaryPointer(event)) return;
         var _latest$current = latest.current,
           onHoverStart = _latest$current.onHoverStart,
           scale = _latest$current.scale;
-        if (scale !== undefined) {
+        if (scale !== undefined && hovered !== active) {
+          hovered = active;
           animate(size, active ? scale : 1, {
             type: 'spring',
             stiffness: 550,

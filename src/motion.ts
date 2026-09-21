@@ -4,6 +4,8 @@ import * as React from 'react'
 // the package no longer carries all of framer inside it. Each part keeps
 // framer's own arithmetic and timing, step for step, so every frame comes out
 // as it did with framer; only the options this package passes are kept.
+// framer-motion is MIT licensed, Copyright (c) 2018 Framer B.V.; its notice
+// is in LICENSE.
 
 interface Frame {
   delta: number // ms since the last frame
@@ -311,9 +313,9 @@ interface TweenOptions {
 const tween = (
   origin: number,
   target: number,
-  { duration, ease }: { duration: number; ease: (p: number) => number }
+  { duration, ease }: Pick<TweenOptions, 'duration' | 'ease'>
 ): Generator => {
-  const along = interpolate(
+  const along = transform(
     [0 * duration, 1 * duration],
     [origin, target],
     [ease]
@@ -392,7 +394,8 @@ const progress = (from: number, to: number, value: number) => {
 
 // Maps a number in `input` to the matching one in `output`, piece by piece,
 // each piece along its `ease`. Numbers outside `input` are held at its ends.
-const interpolate = (
+// Framer exports it as `transform`.
+export const transform = (
   input: number[],
   output: number[],
   ease?: ((progress: number) => number)[]
@@ -421,10 +424,6 @@ const interpolate = (
     return mixers[i](progress(input[i], input[i + 1], v))
   }
 }
-
-// Framer's `transform(input, output)`: a function from one range to the other
-export const transform = (input: number[], output: number[]) =>
-  interpolate(input, output)
 
 export const useIsomorphicLayoutEffect =
   typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect
@@ -476,10 +475,13 @@ export const useHover = (
   React.useEffect(() => {
     const el = ref.current!
     const size = new MotionValue(1)
+    // Scaled up, or on its way. A leave with no enter before it does nothing.
+    let hovered = false
     const hover = (active: boolean) => (event: PointerEvent) => {
       if (!isPrimaryPointer(event)) return
       const { onHoverStart, scale } = latest.current
-      if (scale !== undefined) {
+      if (scale !== undefined && hovered !== active) {
+        hovered = active
         animate(size, active ? scale : 1, {
           type: 'spring',
           stiffness: 550,
