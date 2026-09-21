@@ -96,6 +96,10 @@ const readDepth = (row: HTMLElement | null) => {
 // step can't be seen. A critically damped spring is settled by distance
 // alone; the spring ignores a rest speed for it.
 const WIDTH_REST = 0.1 // pixels
+// Eased over this many seconds a pixel, the spring's fastest frame, at 60
+// frames a second, moves it a pixel: it peaks at 7.5 / seconds / e of the
+// distance a second
+const WIDTH_PACE = 7.5 / Math.E / 60
 const widthSpring = (seconds: number, distance: number, velocity: number) => {
   const frequency = 7.5 / seconds
   const stiffness = frequency ** 2
@@ -663,12 +667,15 @@ const useEasedWidth = (
     const velocity = eased.isAnimating() ? eased.getVelocity() : 0
     if (!eased.isAnimating()) eased.jump(from)
     paint(eased.get())
-    // With copies still carrying older text, the copies' row only reaches its
-    // full width once its last letter turns in, and each further change moves
-    // it again, so the width eases there over the time until then. Changes
-    // in quick succession then carry it along gently rather than swinging it
-    // after every word.
-    const time = mixed ? Math.max(seconds, span) : seconds
+    // With copies still carrying older text, each further change moves the
+    // width again, so it eases there slowly enough not to push the text
+    // beside it more than about a pixel a frame, and at most over the time
+    // until the last letter turns in. Changes in quick succession then carry
+    // it along gently rather than swinging it after every word.
+    const distance = Math.abs(to - eased.get())
+    const time = mixed
+      ? Math.max(seconds, Math.min(span, distance * WIDTH_PACE))
+      : seconds
     animateValue(eased, to, {
       ...widthSpring(time, to - eased.get(), velocity),
       onUpdate: paint,
