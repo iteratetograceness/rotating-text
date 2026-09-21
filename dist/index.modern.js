@@ -8852,6 +8852,10 @@ var RollFaces = function RollFaces(_ref2) {
     });
   };
   useIsomorphicLayoutEffect(function () {
+    if (!still && !sameFaces(next, plan(faces, letters, angles, landing.current))) {
+      rerender();
+      return;
+    }
     syncing.current = true;
     try {
       sync();
@@ -8924,6 +8928,11 @@ var plan = function plan(faces, letters, angles, landing) {
     front: front,
     back: back
   };
+};
+var sameFaces = function sameFaces(a, b) {
+  return a.front.length === b.front.length && a.front.every(function (_char7, i) {
+    return _char7 === b.front[i] && a.back[i] === b.back[i];
+  });
 };
 var offsets = function offsets(row) {
   var along = 0;
@@ -9035,7 +9044,7 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
 };
 var rollShade = transform(ROLL_SHADE_ANGLES, ROLL_SHADE);
 var RollLetter = memo(function RollLetter(_ref4) {
-  var _char7 = _ref4["char"],
+  var _char8 = _ref4["char"],
     angle = _ref4.angle,
     offset = _ref4.offset;
   var face = useRef(null);
@@ -9056,7 +9065,7 @@ var RollLetter = memo(function RollLetter(_ref4) {
       transform: rollTransform(offset),
       opacity: rollShade(offset)
     }
-  }, _char7);
+  }, _char8);
 });
 var FlapBoard = function FlapBoard(_ref5) {
   var letters = _ref5.letters,
@@ -9108,7 +9117,7 @@ var FlapBoard = function FlapBoard(_ref5) {
   }));
 };
 var FlapTile = function FlapTile(_ref6) {
-  var _char8 = _ref6["char"],
+  var _char9 = _ref6["char"],
     duration = _ref6.duration,
     delay = _ref6.delay,
     shuffles = _ref6.shuffles,
@@ -9117,7 +9126,7 @@ var FlapTile = function FlapTile(_ref6) {
     index = _ref6.index,
     onBlank = _ref6.onBlank;
   var _React$useState8 = useState(function () {
-      var first = enter ? ' ' : _char8;
+      var first = enter ? ' ' : _char9;
       return {
         from: first,
         to: first,
@@ -9129,11 +9138,11 @@ var FlapTile = function FlapTile(_ref6) {
     faces = _React$useState8[0],
     setFaces = _React$useState8[1];
   var shown = useRef(faces.to);
-  var wanted = useRef(_char8);
+  var wanted = useRef(_char9);
   var busy = useRef(false);
   var falling = useRef(false);
   var wait = useRef(0);
-  var bringing = useRef(_char8);
+  var bringing = useRef(_char9);
   var running = useRef();
   var seconds = useRef(duration);
   var leave = useRef(onBlank);
@@ -9189,27 +9198,27 @@ var FlapTile = function FlapTile(_ref6) {
     if (leave.current && shown.current === ' ' && wanted.current === ' ') leave.current(index);
   };
   useIsomorphicLayoutEffect(function () {
-    wanted.current = _char8;
+    wanted.current = _char9;
     if (still) {
       if (running.current) running.current.stop();
-      shown.current = _char8;
-      if (busy.current || faces.from !== _char8 || faces.to !== _char8) settle(_char8);
+      shown.current = _char9;
+      if (busy.current || faces.from !== _char9 || faces.to !== _char9) settle(_char9);
     } else if (!busy.current) {
-      if (_char8 !== shown.current) turn(delay);else restingBlank();
+      if (_char9 !== shown.current) turn(delay);else restingBlank();
     } else if (!falling.current) {
-      if (_char8 !== shown.current) {
-        bringing.current = _char8;
+      if (_char9 !== shown.current) {
+        bringing.current = _char9;
         setFaces(function (f) {
           return _extends({}, f, {
-            to: _char8
+            to: _char9
           });
         });
       } else {
         running.current.stop();
-        settle(_char8);
+        settle(_char9);
       }
     }
-  }, [_char8, still, onBlank]);
+  }, [_char9, still, onBlank]);
   var shuffled = useRef(shuffles);
   useEffect(function () {
     if (shuffles === shuffled.current) return;
