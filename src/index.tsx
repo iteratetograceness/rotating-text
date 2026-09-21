@@ -381,6 +381,19 @@ const RollFaces = ({
   }
 
   useIsomorphicLayoutEffect(() => {
+    // A render in a transition can be committed well after it ran, while the
+    // letters went on turning, and a copy that has turned into view since
+    // would take its new letter in plain sight. If the letters have moved on,
+    // the roll renders again at once from where they are now, and that render
+    // replaces this one before it is painted.
+    if (
+      !still &&
+      !sameFaces(next, plan(faces, letters, angles, landing.current))
+    ) {
+      rerender()
+      return
+    }
+
     syncing.current = true
     try {
       sync()
@@ -477,6 +490,10 @@ const plan = (
   }
   return { front, back }
 }
+
+const sameFaces = (a: Faces, b: Faces) =>
+  a.front.length === b.front.length &&
+  a.front.every((char, i) => char === b.front[i] && a.back[i] === b.back[i])
 
 // How far along its row each letter starts, from the row's start edge. The
 // rows of front faces and copies start at the same place.
