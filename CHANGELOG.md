@@ -20,14 +20,23 @@
 - The default roll is now a real 3D turn. Each letter rotates like the face of
   a cube with perspective, dims as it turns away, and settles with a small
   overshoot, instead of shrinking and sliding while it rotates flat.
+- A text change on the roll turns each changed letter over to its new one,
+  like the flap, instead of swapping the text at once. The old letter rolls
+  away with the new one on the face behind it, in the usual stagger and
+  spring, and letters pushed along by a wider or narrower one turn too;
+  letters added or removed turn in from blank or out to blank. Letters still
+  turning when the text changes again finish, then turn on to the newest
+  text once the others have landed. With reduced motion on, the text still
+  changes at once.
 - The roll is driven by a damped spring: a letter leaves the moment it is
   hovered, swings about 6 degrees past the next face and settles within its
   `timing`. For the same `timing` the turn itself is quicker than before, and
   the rest of the time goes on settling. The copy on the next face is locked
   to it, so the two faces can never come apart.
 - Changing `text` while letters are rolling no longer snaps the changed
-  letters back to rest part way through their turn. They keep turning and
-  show the new text, and a letter that comes back later starts at rest.
+  letters back to rest part way through their turn. They finish their turn
+  and then turn on to the new text, and a letter that comes back later
+  starts at rest.
 - After a flip the letters come to rest on their front faces, so selecting
   and copying the text works the same before and after a hover.
 - Hovering again while letters are still moving no longer restarts the flip
@@ -55,8 +64,10 @@
 - When `text` changes on the roll, its width eases from the old word's to the
   new one's over the first letter's `timing`, so the text beside it glides
   instead of jumping. A longer word is uncovered as the width grows rather
-  than drawn over its neighbours. With reduced motion on, or a first `timing`
-  of 0, the width changes at once as before.
+  than drawn over its neighbours, and a shorter one keeps the old word's
+  room until its letters have turned away. With reduced motion on the width
+  changes at once as before, and with a first `timing` of 0 it changes at
+  once when the letters have turned.
 
 ## 1.0.5 (2026-09-20)
 

@@ -61,15 +61,17 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// jsdom does no layout, so the roll's placeholder is given 10px a letter, or
-// the width it is being held at
+// jsdom does no layout, so the roll's rows of letters and its placeholder are
+// given 10px a letter, or the placeholder the width it is being held at
 const letterWidths = () => {
   const real = window.getComputedStyle
   vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
     const style = real.call(window, el, pseudo)
-    if (!String(el.getAttribute('class')).includes('placeholder')) return style
-    const width =
-      (el as HTMLElement).style.width || `${el.textContent!.length * 10}px`
+    const kind = String(el.getAttribute('class'))
+    const row = /front|back/.test(kind)
+    if (!row && !kind.includes('placeholder')) return style
+    const natural = `${el.textContent!.length * 10}px`
+    const width = row ? natural : (el as HTMLElement).style.width || natural
     return new Proxy(style, {
       get: (target, key) => (key === 'width' ? width : (target as any)[key])
     })
@@ -104,6 +106,10 @@ const turns = () =>
     target,
     ...(transition as Record<string, any>)
   }))
+
+// The width easings, as opposed to the letters' turns
+const eases = () =>
+  vi.mocked(animate).mock.calls.filter(([, target]) => target !== -90)
 
 // Runs a letter's turn through framer-motion's own spring, so the angles
 // and the moment it counts as settled are the ones the component gets
@@ -143,16 +149,24 @@ describe('RotatingText', () => {
     }
   })
 
-  it('gives every letter its own turn after the text prop changes', () => {
+  it('turns the letters added to longer text in from blank', () => {
     const { container, rerender } = render(
-      <RotatingText text='ab' timing={0.4} />
+      <RotatingText text='ab' timing={0.4} stagger={0.25} />
     )
-    rerender(<RotatingText text='abcd' timing={0.4} />)
-    hover(container)
+    rerender(<RotatingText text='abcd' timing={0.4} stagger={0.25} />)
 
     expect(letters(container)).toHaveLength(8)
-    expect(turns()).toHaveLength(4)
-    expect(new Set(turns().map((turn) => turn.stiffness)).size).toBe(1)
+    const [front, back] = Array.from(root(container).children)
+    expect(Array.from(front.children, (el) => el.textContent)).toEqual([
+      'a',
+      'b',
+      '',
+      ''
+    ])
+    expect(back.textContent).toBe('abcd')
+    const added = turns().filter((turn) => turn.target === -90)
+    expect(added.map((turn) => turn.delay)).toEqual([0.5, 0.75])
+    expect(new Set(added.map((turn) => turn.stiffness)).size).toBe(1)
   })
 
   it('reuses the last timing entry for letters past the end of the array', () => {
@@ -185,12 +199,35 @@ describe('RotatingText', () => {
     expect(turns().map((turn) => turn.delay)).toEqual([0, 0.2, 0.4])
   })
 
-  it('shows a text change at once when no flip is running', () => {
-    const { container, rerender } = render(<RotatingText text='ab' />)
-    rerender(<RotatingText text='cd' />)
+  it('turns each changed letter from the old letter to the new one', () => {
+    const { container, rerender } = render(
+      <RotatingText text='abc' stagger={0.2} timing={[0.3, 0.5]} />
+    )
+    rerender(<RotatingText text='xbz' stagger={0.2} timing={[0.3, 0.5]} />)
+    // The old letters stay on the front faces and the new ones are on the
+    // copies, which the turn brings round
     const [front, back] = Array.from(root(container).children)
-    expect(front.textContent).toBe('cd')
-    expect(back.textContent).toBe('cd')
+    expect(front.textContent).toBe('abc')
+    expect(back.textContent).toBe('xbz')
+    // Only the changed letters turn, each in its place in the stagger and
+    // with its own timing
+    const changed = turns().filter((turn) => turn.target === -90)
+    expect(changed.map((turn) => turn.delay)).toEqual([0, 0.4])
+    const a = simulate(changed[0])
+    const c = simulate(changed[1])
+    expect(a.settled).toBeLessThanOrEqual(0.3)
+    expect(c.settled).toBeLessThanOrEqual(0.5)
+    expect(c.settled).toBeGreaterThan(0.3)
+  })
+
+  it('does not turn the letters when the text changes with reduced motion', () => {
+    vi.mocked(useReducedMotion).mockReturnValue(true)
+    const { container, rerender } = render(<RotatingText text='ab' />)
+    rerender(<RotatingText text='cde' />)
+    const [front, back] = Array.from(root(container).children)
+    expect(front.textContent).toBe('cde')
+    expect(back.textContent).toBe('cde')
+    expect(animate).not.toHaveBeenCalled()
   })
 
   it('eases the width on a spring that has all but arrived by the end of the first timing, without overshooting', () => {
@@ -198,9 +235,7 @@ describe('RotatingText', () => {
     const { rerender } = render(<RotatingText text='ab' timing={[0.4, 0.1]} />)
     rerender(<RotatingText text='abcde' timing={[0.4, 0.1]} />)
 
-    const [target, transition] = vi
-      .mocked(animate)
-      .mock.calls[0].slice(1) as any
+    const [target, transition] = eases()[0].slice(1) as any
     expect(target).toBe(50)
     const { type, onUpdate, onComplete, ...physics } = transition
     expect(type).toBe('spring')
@@ -226,7 +261,7 @@ describe('RotatingText', () => {
     letterWidths()
     const { rerender } = render(<RotatingText text='' />)
     rerender(<RotatingText text='abc' />)
-    expect(vi.mocked(animate).mock.calls[0][1]).toBe(30)
+    expect(eases()[0][1]).toBe(30)
   })
 
   it('jumps to the new width when reduced motion is preferred', () => {
@@ -247,7 +282,7 @@ describe('RotatingText', () => {
     )
     rerender(<RotatingText text='abcde' timing={0} />)
 
-    expect(animate).not.toHaveBeenCalled()
+    expect(eases()).toHaveLength(0)
     expect(placeholder(container).style.width).toBe('')
   })
 
@@ -256,7 +291,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(<RotatingText text='ab' />)
     rerender(<RotatingText text='cd' />)
 
-    expect(animate).not.toHaveBeenCalled()
+    expect(eases()).toHaveLength(0)
     expect(placeholder(container).style.width).toBe('')
   })
 

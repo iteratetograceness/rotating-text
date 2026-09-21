@@ -50,7 +50,7 @@ function MyApp() {
 | `className` | `string`              | `undefined` | Class name added to the outer container.                                  |
 | `style`     | `React.CSSProperties` | `undefined` | Inline styles applied to the outer container.                             |
 
-When `text` changes on the roll, its width eases to the new word's over the first letter's `timing`, so text beside it glides along instead of jumping. With reduced motion on it changes at once.
+When `text` changes on the roll, each letter that changed turns over to the new one, in the same stagger and spring as a hover, and so does any letter a wider or narrower one pushes along; letters added or removed turn in from blank or out to blank. The width eases to the new word's over the first letter's `timing`, so text beside it glides along instead of jumping. A shorter word keeps the old one's room until its letters have turned away. With reduced motion on the text changes at once.
 
 ### Split-flap tiles
 
