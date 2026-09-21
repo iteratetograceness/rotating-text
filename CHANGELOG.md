@@ -69,6 +69,11 @@
   changes at once as before, and with a first `timing` of 0 it changes at
   once when the letters have turned.
 
+### Fixes
+
+- Spaces in the roll's text are drawn again, so "Rotating text!" no longer
+  shows as "Rotatingtext!". Runs of spaces keep their width too.
+
 ## 1.0.5 (2026-09-20)
 
 ### Fixes

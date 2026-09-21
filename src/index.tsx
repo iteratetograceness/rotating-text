@@ -533,7 +533,7 @@ const useEasedWidth = (
   }
   const release = () => {
     for (const el of [placeholder.current, front.current, back.current]) {
-      if (el) el.style.width = el.style.whiteSpace = el.style.clipPath = ''
+      if (el) el.style.width = el.style.clipPath = ''
     }
   }
 
@@ -571,9 +571,6 @@ const useEasedWidth = (
       rtl: direction === 'rtl',
       reach: parseFloat(fontSize) / 4 || 0
     }
-    // Held narrower than its text, the placeholder must not wrap to a
-    // second line and grow taller
-    el.style.whiteSpace = 'nowrap'
     if (!easing) {
       eased.stop()
       paint(to)

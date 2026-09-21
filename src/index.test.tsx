@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { renderToString } from 'react-dom/server'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -79,6 +81,24 @@ describe('RotatingText', () => {
     expect(container.firstElementChild!.lastElementChild!.textContent).toBe(
       'hello'
     )
+  })
+
+  // jsdom applies no stylesheet, so this reads the rules themselves: a space
+  // alone in a letter's box, or doubled in the placeholder, collapses to
+  // nothing unless white space is kept
+  it('keeps the spaces between words in the roll', () => {
+    const css = readFileSync(join(__dirname, 'index.module.css'), 'utf8')
+    for (const selector of ['.face', '.placeholder']) {
+      const rule = css.match(new RegExp(`\\${selector} \\{([^}]*)\\}`))
+      expect(rule?.[1]).toMatch(/white-space: pre;/)
+    }
+    const { container } = render(<RotatingText text='a  b c' />)
+    const [front, back, placeholder] = Array.from(
+      container.firstElementChild!.children
+    )
+    expect(front.children).toHaveLength(6)
+    expect(back.children).toHaveLength(6)
+    expect(placeholder.textContent).toBe('a  b c')
   })
 
   it('rolls each letter a quarter turn on hover and comes to rest facing front', async () => {
@@ -235,7 +255,6 @@ describe('RotatingText', () => {
     // than drawn over whatever comes after, and the old ones, which fit,
     // left whole
     expect(placeholder.style.width).toBe('20px')
-    expect(placeholder.style.whiteSpace).toBe('nowrap')
     expect(back.style.clipPath).toBe('inset(-1000px 30px -1000px -1000px)')
     expect(front.style.clipPath).toBe('inset(-1000px 0px -1000px -1000px)')
     expect(front.textContent).toBe('hi')
@@ -250,7 +269,6 @@ describe('RotatingText', () => {
       expect(width).toBeLessThanOrEqual(50)
     })
     expect(Math.max(...seen)).toBeGreaterThan(49)
-    expect(placeholder.style.whiteSpace).toBe('')
     expect(front.style.clipPath).toBe('')
     expect(back.style.clipPath).toBe('')
     await waitFor(() => expect(front.textContent).toBe('hello'))

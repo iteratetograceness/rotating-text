@@ -8963,7 +8963,7 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
   var release = function release() {
     for (var _i2 = 0, _arr = [placeholder.current, front.current, back.current]; _i2 < _arr.length; _i2++) {
       var el = _arr[_i2];
-      if (el) el.style.width = el.style.whiteSpace = el.style.clipPath = '';
+      if (el) el.style.width = el.style.clipPath = '';
     }
   };
   useIsomorphicLayoutEffect(function () {
@@ -8996,7 +8996,6 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
       rtl: direction === 'rtl',
       reach: parseFloat(fontSize) / 4 || 0
     };
-    el.style.whiteSpace = 'nowrap';
     if (!easing) {
       eased.stop();
       paint(to);
