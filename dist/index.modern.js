@@ -1,4 +1,4 @@
-import React__default, { createContext, useContext, useLayoutEffect, useEffect, useRef, useCallback, useMemo, forwardRef, createElement, useId, useState, Fragment, memo } from 'react';
+import React__default, { createContext, useContext, useLayoutEffect, useEffect, useRef, useCallback, useMemo, forwardRef, createElement, useId, useState, useReducer, Fragment, memo } from 'react';
 
 function _extends() {
   _extends = Object.assign ? Object.assign.bind() : function (target) {
@@ -8732,31 +8732,142 @@ var RollFaces = function RollFaces(_ref2) {
     still = _ref2.still,
     startRef = _ref2.startRef;
   var angles = useRef([]).current;
-  while (angles.length < letters.length) angles.push(createAngle());
-  useIsomorphicLayoutEffect(function () {
-    angles.splice(letters.length).forEach(function (a) {
-      return a.stop();
+  var _React$useState2 = useState(function () {
+      return new Set();
+    }),
+    turning = _React$useState2[0];
+  var _React$useState3 = useState(function () {
+      return new Set();
+    }),
+    hovered = _React$useState3[0];
+  var _React$useState4 = useState(function () {
+      return new Set();
+    }),
+    moved = _React$useState4[0];
+  var faces = useRef({
+    front: letters,
+    back: letters
+  }).current;
+  var landing = useRef(false);
+  var syncing = useRef(false);
+  var latest = useRef(letters);
+  var _React$useReducer = useReducer(function (n) {
+      return n + 1;
+    }, 0),
+    rerender = _React$useReducer[1];
+  var update = function update() {
+    return Promise.resolve().then(rerender);
+  };
+  var next = still ? {
+    front: letters,
+    back: letters
+  } : plan(faces, letters, angles, landing.current);
+  while (angles.length < next.front.length) angles.push(createAngle());
+  var word = letters.join('');
+  var was = next.front.join('');
+  var coming = next.back.join('');
+  var width = useEasedWidth([word, was, coming].join('\n'), was !== word || coming !== word, duration(0), still);
+  var finish = function finish() {
+    if (landing.current || syncing.current || turning.size) return;
+    if (!moved.size && faces.front.every(function (_char, i) {
+      return _char === faces.back[i];
+    })) return;
+    landing.current = true;
+    update();
+  };
+  var rested = function rested(angle) {
+    turning["delete"](angle);
+    hovered["delete"](angle);
+    var i = angles.indexOf(angle);
+    if (i >= 0 && faces.front[i] === faces.back[i] && !moved.has(angle)) {
+      if (angle.get() !== 0) angle.jump(0);
+    }
+    var text = latest.current;
+    var count = Math.max(text.length, faces.back.length);
+    for (var j = 0; j < count; j++) {
+      if ((faces.back[j] || '') !== (text[j] || '')) {
+        update();
+        break;
+      }
+    }
+    finish();
+  };
+  var turn = function turn(angle, i, delay) {
+    turning.add(angle);
+    var over = false;
+    animate$1(angle, -90, _extends({}, rollSpring(duration(i)), {
+      delay: delay,
+      onComplete: function onComplete() {
+        over = true;
+        rested(angle);
+      },
+      onStop: function onStop() {
+        if (over) return;
+        over = true;
+        angle.set(0);
+        rested(angle);
+      }
+    }));
+  };
+  var sync = function sync() {
+    var landed = landing.current;
+    landing.current = false;
+    var changed = word !== latest.current.join('');
+    latest.current = letters;
+    var bringing = faces.back;
+    faces.front = next.front;
+    faces.back = next.back;
+    if (landed || still) moved.clear();
+    angles.splice(next.front.length).forEach(function (a) {
+      moved["delete"](a);
+      a.stop();
     });
-    var turning = angles.slice();
+    if (landed || still) {
+      angles.forEach(function (angle) {
+        angle.stop();
+        if (angle.get() !== 0) angle.jump(0);
+      });
+    }
+    if (still) return;
+    var reflowed = landed || bringing.length !== next.back.length || next.back.some(function (_char2, i) {
+      return _char2 !== bringing[i];
+    });
+    var starts = reflowed && next.front.some(function (_char3, i) {
+      return _char3 !== next.back[i];
+    }) && [width.front.current, width.back.current].map(offsets);
+    var first = -1;
+    next.front.forEach(function (_char4, i) {
+      var angle = angles[i];
+      if (angle.get() !== 0) return;
+      if (reflowed) {
+        if (starts && Math.abs(starts[0][i] - starts[1][i]) > 0.5) moved.add(angle);else moved["delete"](angle);
+      }
+      var needed = _char4 !== next.back[i] || moved.has(angle);
+      if (turning.has(angle)) {
+        if (!needed && !hovered.has(angle)) angle.stop();
+      } else if (needed) {
+        if (first < 0) first = changed ? 0 : i;
+        turn(angle, i, (i - first) * stagger);
+      }
+    });
+  };
+  useIsomorphicLayoutEffect(function () {
+    syncing.current = true;
+    try {
+      sync();
+    } finally {
+      syncing.current = false;
+    }
+    finish();
+    var slots = angles.slice();
     startRef.current = function () {
-      if (turning.some(function (a) {
-        return a.isAnimating();
-      })) return;
-      turning.forEach(function (angle, i) {
-        return animate$1(angle, -90, _extends({}, rollSpring(duration(i)), {
-          delay: i * stagger,
-          onComplete: function onComplete() {
-            return angle.jump(0);
-          },
-          onStop: function onStop() {
-            return angle.set(0);
-          }
-        }));
+      if (turning.size || landing.current) return;
+      slots.forEach(function (angle, i) {
+        hovered.add(angle);
+        turn(angle, i, i * stagger);
       });
     };
   });
-  var word = letters.join('');
-  var width = useEasedWidth(word, duration(0), still);
   useEffect(function () {
     return function () {
       startRef.current = undefined;
@@ -8768,10 +8879,10 @@ var RollFaces = function RollFaces(_ref2) {
   return createElement(Fragment, null, createElement("div", {
     className: styles.front,
     ref: width.front
-  }, letters.map(function (_char, i) {
+  }, next.front.map(function (_char5, i) {
     return createElement(RollLetter, {
       key: i,
-      "char": _char,
+      "char": _char5,
       angle: angles[i],
       offset: 0
     });
@@ -8779,10 +8890,10 @@ var RollFaces = function RollFaces(_ref2) {
     className: styles.back + " " + styles.copy,
     "aria-hidden": 'true',
     ref: width.back
-  }, letters.map(function (_char2, i) {
+  }, next.back.map(function (_char6, i) {
     return createElement(RollLetter, {
       key: i,
-      "char": _char2,
+      "char": _char6,
       angle: angles[i],
       offset: 90
     });
@@ -8791,17 +8902,48 @@ var RollFaces = function RollFaces(_ref2) {
     ref: width.placeholder
   }, word));
 };
-var useEasedWidth = function useEasedWidth(word, seconds, still) {
+var plan = function plan(faces, letters, angles, landing) {
+  var front = [];
+  var back = [];
+  var count = Math.max(letters.length, faces.front.length);
+  var shown = -1;
+  for (var i = 0; i < faces.front.length && i < angles.length; i++) {
+    if (angles[i].get() !== 0) shown = i;
+  }
+  for (var _i = 0; _i < count; _i++) {
+    var bringing = _i < faces.back.length ? faces.back[_i] : '';
+    var free = landing || _i > shown;
+    front.push(landing ? bringing : _i < faces.front.length ? faces.front[_i] : '');
+    back.push(free ? _i < letters.length ? letters[_i] : '' : bringing);
+  }
+  while (front.length > letters.length && !front[front.length - 1] && !back[back.length - 1]) {
+    front.pop();
+    back.pop();
+  }
+  return {
+    front: front,
+    back: back
+  };
+};
+var offsets = function offsets(row) {
+  var along = 0;
+  return Array.from(row.children, function (letter) {
+    var start = along;
+    along += parseFloat(getComputedStyle(letter).width) || 0;
+    return start;
+  });
+};
+var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
   var placeholder = useRef(null);
   var front = useRef(null);
   var back = useRef(null);
-  var _React$useState2 = useState(function () {
+  var _React$useState5 = useState(function () {
       return motionValue(0);
     }),
-    eased = _React$useState2[0];
+    eased = _React$useState5[0];
   var natural = useRef(NaN);
   var heading = useRef({
-    to: 0,
+    rows: [0, 0],
     rtl: false,
     reach: 0
   });
@@ -8809,23 +8951,23 @@ var useEasedWidth = function useEasedWidth(word, seconds, still) {
     if (!placeholder.current || !front.current || !back.current) return;
     placeholder.current.style.width = px + "px";
     var _heading$current = heading.current,
-      to = _heading$current.to,
+      rows = _heading$current.rows,
       rtl = _heading$current.rtl,
       reach = _heading$current.reach;
-    var left = Math.max(0, to - px);
-    var cut = left < reach ? 2 * left - reach : left;
-    var clip = rtl ? "inset(-1000px -1000px -1000px " + cut + "px)" : "inset(-1000px " + cut + "px -1000px -1000px)";
-    front.current.style.clipPath = clip;
-    back.current.style.clipPath = clip;
+    [front.current, back.current].forEach(function (row, i) {
+      var left = Math.max(0, rows[i] - px);
+      var cut = left < reach ? 2 * left - reach : left;
+      row.style.clipPath = rtl ? "inset(-1000px -1000px -1000px " + cut + "px)" : "inset(-1000px " + cut + "px -1000px -1000px)";
+    });
   };
   var release = function release() {
-    for (var _i = 0, _arr = [placeholder.current, front.current, back.current]; _i < _arr.length; _i++) {
-      var el = _arr[_i];
+    for (var _i2 = 0, _arr = [placeholder.current, front.current, back.current]; _i2 < _arr.length; _i2++) {
+      var el = _arr[_i2];
       if (el) el.style.width = el.style.whiteSpace = el.style.clipPath = '';
     }
   };
   useIsomorphicLayoutEffect(function () {
-    if (still || !(seconds > 0)) {
+    if (still) {
       eased.stop();
       release();
       return;
@@ -8833,9 +8975,15 @@ var useEasedWidth = function useEasedWidth(word, seconds, still) {
     var el = placeholder.current;
     var from = eased.isAnimating() ? eased.get() : natural.current;
     el.style.width = '';
-    var to = parseFloat(getComputedStyle(el).width);
+    var word = parseFloat(getComputedStyle(el).width);
+    var rows = [front.current, back.current].map(function (row) {
+      return parseFloat(getComputedStyle(row).width);
+    });
+    var to = holding ? word + Math.max(0, rows[0] - rows[1] || 0) : word;
     natural.current = to;
-    if (!(Math.abs(to - from) >= WIDTH_REST)) {
+    var held = to - word >= WIDTH_REST;
+    var easing = seconds > 0 && Math.abs(to - from) >= WIDTH_REST;
+    if (!easing && !held) {
       eased.stop();
       release();
       return;
@@ -8844,19 +8992,24 @@ var useEasedWidth = function useEasedWidth(word, seconds, still) {
       direction = _getComputedStyle.direction,
       fontSize = _getComputedStyle.fontSize;
     heading.current = {
-      to: to,
+      rows: rows,
       rtl: direction === 'rtl',
       reach: parseFloat(fontSize) / 4 || 0
     };
     el.style.whiteSpace = 'nowrap';
+    if (!easing) {
+      eased.stop();
+      paint(to);
+      return;
+    }
     var velocity = eased.isAnimating() ? eased.getVelocity() : 0;
     if (!eased.isAnimating()) eased.jump(from);
     paint(eased.get());
     animate$1(eased, to, _extends({}, widthSpring(seconds, to - eased.get(), velocity), {
       onUpdate: paint,
-      onComplete: release
+      onComplete: held ? undefined : release
     }));
-  }, [word, still]);
+  }, [size, still]);
   useIsomorphicLayoutEffect(function () {
     return function () {
       return eased.stop();
@@ -8883,7 +9036,7 @@ var useEasedWidth = function useEasedWidth(word, seconds, still) {
 };
 var rollShade = transform(ROLL_SHADE_ANGLES, ROLL_SHADE);
 var RollLetter = memo(function RollLetter(_ref4) {
-  var _char3 = _ref4["char"],
+  var _char7 = _ref4["char"],
     angle = _ref4.angle,
     offset = _ref4.offset;
   var face = useRef(null);
@@ -8904,7 +9057,7 @@ var RollLetter = memo(function RollLetter(_ref4) {
       transform: rollTransform(offset),
       opacity: rollShade(offset)
     }
-  }, _char3);
+  }, _char7);
 });
 var FlapBoard = function FlapBoard(_ref5) {
   var letters = _ref5.letters,
@@ -8912,14 +9065,14 @@ var FlapBoard = function FlapBoard(_ref5) {
     stagger = _ref5.stagger,
     shuffles = _ref5.shuffles,
     still = _ref5.still;
-  var _React$useState3 = useState(letters.length),
-    slots = _React$useState3[0],
-    setSlots = _React$useState3[1];
+  var _React$useState6 = useState(letters.length),
+    slots = _React$useState6[0],
+    setSlots = _React$useState6[1];
   var count = still ? letters.length : Math.max(slots, letters.length);
-  var _React$useState4 = useState(function () {
+  var _React$useState7 = useState(function () {
       return new Set();
     }),
-    gone = _React$useState4[0];
+    gone = _React$useState7[0];
   var length = useRef(letters.length);
   useIsomorphicLayoutEffect(function () {
     length.current = letters.length;
@@ -8956,7 +9109,7 @@ var FlapBoard = function FlapBoard(_ref5) {
   }));
 };
 var FlapTile = function FlapTile(_ref6) {
-  var _char4 = _ref6["char"],
+  var _char8 = _ref6["char"],
     duration = _ref6.duration,
     delay = _ref6.delay,
     shuffles = _ref6.shuffles,
@@ -8964,8 +9117,8 @@ var FlapTile = function FlapTile(_ref6) {
     enter = _ref6.enter,
     index = _ref6.index,
     onBlank = _ref6.onBlank;
-  var _React$useState5 = useState(function () {
-      var first = enter ? ' ' : _char4;
+  var _React$useState8 = useState(function () {
+      var first = enter ? ' ' : _char8;
       return {
         from: first,
         to: first,
@@ -8974,14 +9127,14 @@ var FlapTile = function FlapTile(_ref6) {
         settled: 0
       };
     }),
-    faces = _React$useState5[0],
-    setFaces = _React$useState5[1];
+    faces = _React$useState8[0],
+    setFaces = _React$useState8[1];
   var shown = useRef(faces.to);
-  var wanted = useRef(_char4);
+  var wanted = useRef(_char8);
   var busy = useRef(false);
   var falling = useRef(false);
   var wait = useRef(0);
-  var bringing = useRef(_char4);
+  var bringing = useRef(_char8);
   var running = useRef();
   var seconds = useRef(duration);
   var leave = useRef(onBlank);
@@ -9037,27 +9190,27 @@ var FlapTile = function FlapTile(_ref6) {
     if (leave.current && shown.current === ' ' && wanted.current === ' ') leave.current(index);
   };
   useIsomorphicLayoutEffect(function () {
-    wanted.current = _char4;
+    wanted.current = _char8;
     if (still) {
       if (running.current) running.current.stop();
-      shown.current = _char4;
-      if (busy.current || faces.from !== _char4 || faces.to !== _char4) settle(_char4);
+      shown.current = _char8;
+      if (busy.current || faces.from !== _char8 || faces.to !== _char8) settle(_char8);
     } else if (!busy.current) {
-      if (_char4 !== shown.current) turn(delay);else restingBlank();
+      if (_char8 !== shown.current) turn(delay);else restingBlank();
     } else if (!falling.current) {
-      if (_char4 !== shown.current) {
-        bringing.current = _char4;
+      if (_char8 !== shown.current) {
+        bringing.current = _char8;
         setFaces(function (f) {
           return _extends({}, f, {
-            to: _char4
+            to: _char8
           });
         });
       } else {
         running.current.stop();
-        settle(_char4);
+        settle(_char8);
       }
     }
-  }, [_char4, still, onBlank]);
+  }, [_char8, still, onBlank]);
   var shuffled = useRef(shuffles);
   useEffect(function () {
     if (shuffles === shuffled.current) return;

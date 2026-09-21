@@ -19,15 +19,20 @@ const watch = (el: Element, record: () => void) => {
   observers.push(observer)
 }
 
-// jsdom does no layout, so the roll's placeholder is given 10px a letter, or
-// the width it is being held at
+// jsdom does no layout, so letters are given 10px each, and a W 20px. The
+// roll's rows and placeholder are as wide as their letters, or the
+// placeholder the width it is being held at.
 const letterWidths = () => {
   const real = window.getComputedStyle
+  const across = (text: string) =>
+    Array.from(text).reduce((sum, char) => sum + (char === 'W' ? 20 : 10), 0)
   vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
     const style = real.call(window, el, pseudo)
-    if (!String(el.getAttribute('class')).includes('placeholder')) return style
-    const width =
-      (el as HTMLElement).style.width || `${el.textContent!.length * 10}px`
+    const kind = String(el.getAttribute('class'))
+    if (!/face|front|back|placeholder/.test(kind)) return style
+    const natural = `${across(el.textContent!)}px`
+    const held = kind.includes('placeholder') && (el as HTMLElement).style.width
+    const width = held || natural
     return new Proxy(style, {
       get: (target, key) => (key === 'width' ? width : (target as any)[key])
     })
@@ -227,12 +232,14 @@ describe('RotatingText', () => {
     rerender(<RotatingText text='hello' timing={0.2} />)
 
     // Held at the old width, with the new letters cut off at its edge rather
-    // than drawn over whatever comes after
+    // than drawn over whatever comes after, and the old ones, which fit,
+    // left whole
     expect(placeholder.style.width).toBe('20px')
     expect(placeholder.style.whiteSpace).toBe('nowrap')
-    expect(front.style.clipPath).toBe('inset(-1000px 30px -1000px -1000px)')
-    expect(back.style.clipPath).toBe(front.style.clipPath)
-    expect(front.textContent).toBe('hello')
+    expect(back.style.clipPath).toBe('inset(-1000px 30px -1000px -1000px)')
+    expect(front.style.clipPath).toBe('inset(-1000px 0px -1000px -1000px)')
+    expect(front.textContent).toBe('hi')
+    expect(back.textContent).toBe('hello')
 
     // Widens steadily without passing the new width, then lets go, so at
     // rest the roll is laid out as before
@@ -246,6 +253,219 @@ describe('RotatingText', () => {
     expect(placeholder.style.whiteSpace).toBe('')
     expect(front.style.clipPath).toBe('')
     expect(back.style.clipPath).toBe('')
+    await waitFor(() => expect(front.textContent).toBe('hello'))
+  })
+
+  it('holds the width of longer old text until its letters have turned away', async () => {
+    letterWidths()
+    const { container, rerender } = render(
+      <RotatingText text='hello' timing={0.1} stagger={0.02} />
+    )
+    const [front, back, placeholder] = Array.from(
+      container.firstElementChild!.children
+    ) as HTMLElement[]
+    const seen: [number, string][] = []
+    watch(placeholder, () =>
+      seen.push([px(placeholder.style.width), front.textContent!])
+    )
+    rerender(<RotatingText text='hi' timing={0.1} stagger={0.02} />)
+
+    // The letters past the end turn to blank, and the old word keeps its room
+    expect(front.textContent).toBe('hello')
+    expect(back.textContent).toBe('hi')
+    expect(back.querySelectorAll('span')).toHaveLength(5)
+    expect(placeholder.style.width).toBe('50px')
+
+    // Once they have, the blank slots go and the width eases in
+    await waitFor(() => expect(front.querySelectorAll('span')).toHaveLength(2))
+    expect(front.textContent).toBe('hi')
+    await waitFor(() => expect(placeholder.style.width).toBe(''))
+    const narrowed = seen.filter(([width]) => width < 50)
+    expect(narrowed.length).toBeGreaterThan(3)
+    // Only once the new word was on the front faces
+    for (const [width, text] of narrowed) {
+      expect(text).toBe('hi')
+      expect(width).toBeGreaterThanOrEqual(20)
+    }
+  })
+
+  it('turns a letter from its old face to its new one when the text changes', async () => {
+    const { container, rerender } = render(
+      <RotatingText text='ab' timing={0.2} stagger={0.05} />
+    )
+    const [front, back] = Array.from(container.firstElementChild!.children)
+    const [frontA, frontB] = Array.from(front.querySelectorAll('span'))
+    const [backA] = Array.from(back.querySelectorAll('span'))
+    // Each time the first letter moves: its angle and both faces' letters
+    const seen: [number, string, string][] = []
+    watch(frontA, () =>
+      seen.push([angle(frontA), frontA.textContent!, backA.textContent!])
+    )
+    rerender(<RotatingText text='cd' timing={0.2} stagger={0.05} />)
+
+    await waitFor(() => {
+      expect(front.textContent).toBe('cd')
+      expect(angle(frontA)).toBe(0)
+      expect(angle(frontB)).toBe(0)
+    })
+    // The old letter rolled away with the new one on the copy behind it,
+    // and the front face took the new letter only once it was back at rest
+    const turning = seen.filter(([a]) => a !== 0)
+    expect(turning.length).toBeGreaterThan(3)
+    expect(Math.min(...turning.map(([a]) => a))).toBeLessThan(-85)
+    for (const [, was, coming] of turning) {
+      expect(was).toBe('a')
+      expect(coming).toBe('c')
+    }
+    expect(backA.style.opacity).toBe('0')
+    // Still the same elements
+    expect(front.querySelector('span')).toBe(frontA)
+  })
+
+  it('turns the letters a wider one pushes along, and only those', async () => {
+    letterWidths()
+    const props = { timing: 0.1, stagger: 0.05 }
+    const { container, rerender } = render(
+      <RotatingText text='aHib' {...props} />
+    )
+    const [front] = Array.from(container.firstElementChild!.children)
+    const letters = Array.from(front.querySelectorAll('span'))
+    const lowest = letters.map(() => 0)
+    letters.forEach((letter, i) =>
+      watch(letter, () => {
+        lowest[i] = Math.min(lowest[i], angle(letter))
+      })
+    )
+    // The W is wider than the H, so the letters after it move along
+    rerender(<RotatingText text='aWib' {...props} />)
+    await waitFor(() => expect(front.textContent).toBe('aWib'))
+    expect(lowest.map((deg) => deg < -85)).toEqual([false, true, true, true])
+    for (const letter of letters) expect(angle(letter)).toBe(0)
+  })
+
+  it('leaves a copy on screen where it is when a letter before it changes', async () => {
+    letterWidths()
+    const props = { timing: 0.2, stagger: 0.05 }
+    const { container, rerender } = render(
+      <RotatingText text='abc' {...props} />
+    )
+    const [front, back] = Array.from(container.firstElementChild!.children)
+    const third = front.querySelectorAll('span')[2]
+    rerender(<RotatingText text='abx' {...props} />)
+    await waitFor(() => expect(angle(third)).toBeLessThan(-30))
+    // A W in front of the turning x would push its copy along mid-turn, so
+    // the W waits until the x has landed
+    rerender(<RotatingText text='Wbx' {...props} />)
+    expect(back.textContent).toBe('abx')
+    await waitFor(() => {
+      expect(front.textContent).toBe('Wbx')
+      for (const letter of Array.from(front.querySelectorAll('span')))
+        expect(angle(letter)).toBe(0)
+    })
+  })
+
+  it('keeps a hovered letter on its copy when a wider letter before it pushes it along', async () => {
+    letterWidths()
+    const props = { timing: 0.1, stagger: 0.1 }
+    const { container, rerender } = render(
+      <RotatingText text='abc' {...props} />
+    )
+    const [front] = Array.from(container.firstElementChild!.children)
+    const third = front.querySelectorAll('span')[2]
+    // The text each time the third letter comes back to its front face
+    const back: string[] = []
+    let turned = false
+    watch(third, () => {
+      if (angle(third) < -85) turned = true
+      else if (turned && angle(third) === 0) back.push(front.textContent!)
+    })
+    fireEvent.pointerEnter(container.firstElementChild!)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    rerender(<RotatingText text='aWc' {...props} />)
+    await waitFor(() => {
+      expect(front.textContent).toBe('aWc')
+      expect(angle(third)).toBe(0)
+    })
+    // Never back on its front face at its old place
+    expect(back.length).toBeGreaterThan(0)
+    expect(back.every((text) => text === 'aWc')).toBe(true)
+  })
+
+  it('keeps the old letters in front while a letter waiting its turn is dropped', async () => {
+    const props = { timing: 0.2, stagger: 0.5 }
+    for (const between of ['ay', 'abc']) {
+      const { container, rerender, unmount } = render(
+        <RotatingText text='ab' {...props} />
+      )
+      const [front, back] = Array.from(container.firstElementChild!.children)
+      rerender(<RotatingText text={between} {...props} />)
+      rerender(<RotatingText text='xb' {...props} />)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      // The second letter had nothing left to turn to, but the first still
+      // turns from 'a' to 'x' rather than showing it at once
+      expect(front.textContent).toBe('ab')
+      expect(back.textContent).toBe('xb')
+      await waitFor(() => expect(front.textContent).toBe('xb'))
+      unmount()
+    }
+  })
+
+  it('keeps a hover flip waiting its turn when the text changes and changes back', async () => {
+    const props = { timing: 0.1, stagger: 0.2 }
+    const { container, rerender } = render(
+      <RotatingText text='ab' {...props} />
+    )
+    const second = container.querySelectorAll('span')[1]
+    const seen: number[] = []
+    watch(second, () => seen.push(angle(second)))
+    fireEvent.pointerEnter(container.firstElementChild!)
+    rerender(<RotatingText text='ad' {...props} />)
+    rerender(<RotatingText text='ab' {...props} />)
+    await waitFor(() => expect(Math.min(...seen)).toBeLessThan(-85))
+    await waitFor(() => expect(angle(second)).toBe(0))
+  })
+
+  it('turns every letter on hover once letters added to the text have come in', async () => {
+    const props = { timing: 0.05, stagger: 0.01 }
+    const { container, rerender } = render(
+      <RotatingText text='ab' {...props} />
+    )
+    const [front] = Array.from(container.firstElementChild!.children)
+    rerender(<RotatingText text='abcd' {...props} />)
+    await waitFor(() => expect(front.textContent).toBe('abcd'))
+
+    const letters = Array.from(front.querySelectorAll('span'))
+    const lowest = letters.map(() => 0)
+    letters.forEach((letter, i) =>
+      watch(letter, () => {
+        lowest[i] = Math.min(lowest[i], angle(letter))
+      })
+    )
+    fireEvent.pointerEnter(container.firstElementChild!)
+    await waitFor(() => expect(Math.max(...lowest)).toBeLessThan(-85))
+  })
+
+  it('turns on to the newest text when it changes while letters turn to new text', async () => {
+    const props = { timing: 0.2, stagger: 0.15 }
+    const { container, rerender } = render(
+      <RotatingText text='ab' {...props} />
+    )
+    const [front, back] = Array.from(container.firstElementChild!.children)
+    const frontA = front.querySelector('span')!
+    rerender(<RotatingText text='cd' {...props} />)
+    await waitFor(() => expect(angle(frontA)).toBeLessThan(-30))
+    rerender(<RotatingText text='efg' {...props} />)
+
+    // The turning letter keeps its new letter; the rest take the newest
+    expect(back.textContent).toBe('cfg')
+    await waitFor(() => {
+      expect(front.textContent).toBe('efg')
+      expect(back.textContent).toBe('efg')
+      for (const letter of Array.from(front.querySelectorAll('span'))) {
+        expect(angle(letter)).toBe(0)
+      }
+    })
   })
 
   it('carries on from the width it has reached when the text changes again', async () => {

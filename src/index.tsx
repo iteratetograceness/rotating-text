@@ -216,6 +216,8 @@ interface RollProps {
 }
 
 // The front letter rolls down and away while its copy rolls in from above.
+// When the text changes, each slot whose letter changed turns the same way,
+// with the old letter on its front face and the new one on the copy.
 const RollFaces = ({
   letters,
   duration,
@@ -223,38 +225,181 @@ const RollFaces = ({
   still,
   startRef
 }: RollProps) => {
-  // One angle per letter, the front face's. They outlive text changes, so a
+  // One angle per slot, the front face's. They outlive text changes, so a
   // letter that is turning keeps turning when the text changes under it.
   const angles = React.useRef<Angle[]>([]).current
-  while (angles.length < letters.length) angles.push(createAngle())
+  // Angles that are turning, or waiting for their turn in the stagger
+  const [turning] = React.useState(() => new Set<Angle>())
+  // Of those, the ones a hover is turning over themselves
+  const [hovered] = React.useState(() => new Set<Angle>())
+  // Slots whose copy sits beside their front face rather than on it, because
+  // letters before them changed width. They turn too, and come back to their
+  // front face only once the fronts take the new text.
+  const [moved] = React.useState(() => new Set<Angle>())
+  // What each slot's front face and copy show, as of the last commit
+  const faces = React.useRef<Faces>({ front: letters, back: letters }).current
+  // Set once every slot has turned, until the fronts take the new letters
+  const landing = React.useRef(false)
+  // Set while the effect below brings the slots up to date
+  const syncing = React.useRef(false)
+  // The text as of the last commit
+  const latest = React.useRef(letters)
+  const [, rerender] = React.useReducer((n: number) => n + 1, 0)
+  // Renders again once framer has let go of the turn that just ended, so a
+  // turn that render starts on the same angle is its own
+  const update = () => Promise.resolve().then(rerender)
+
+  const next = still
+    ? { front: letters, back: letters }
+    : plan(faces, letters, angles, landing.current)
+  while (angles.length < next.front.length) angles.push(createAngle())
+  const word = letters.join('')
+  const was = next.front.join('')
+  const coming = next.back.join('')
+  const width = useEasedWidth(
+    [word, was, coming].join('\n'),
+    was !== word || coming !== word,
+    duration(0),
+    still
+  )
+
+  // Once no slot is turning, the ones that turned to a new letter or place
+  // show it on their copy. The next render puts it on their front face too.
+  const finish = () => {
+    if (landing.current || syncing.current || turning.size) return
+    if (!moved.size && faces.front.every((char, i) => char === faces.back[i]))
+      return
+    landing.current = true
+    update()
+  }
+
+  const rested = (angle: Angle) => {
+    turning.delete(angle)
+    hovered.delete(angle)
+    const i = angles.indexOf(angle)
+    if (i >= 0 && faces.front[i] === faces.back[i] && !moved.has(angle)) {
+      // It turned over itself, as on a hover. Put its front face back, which
+      // looks the same, so selecting text and the next flip start from there.
+      if (angle.get() !== 0) angle.jump(0)
+    }
+    // If the text changed while letters turned, the ones now free of it turn
+    // on to the new letters
+    const text = latest.current
+    const count = Math.max(text.length, faces.back.length)
+    for (let j = 0; j < count; j++) {
+      if ((faces.back[j] || '') !== (text[j] || '')) {
+        update()
+        break
+      }
+    }
+    finish()
+  }
+
+  const turn = (angle: Angle, i: number, delay: number) => {
+    turning.add(angle)
+    // Framer can report a turn stopped after it has completed
+    let over = false
+    animateValue(angle, -90, {
+      ...rollSpring(duration(i)),
+      delay,
+      onComplete: () => {
+        over = true
+        rested(angle)
+      },
+      // A turn cut short, say because the letter was hidden, goes back to
+      // rest rather than staying frozen part way round
+      onStop: () => {
+        if (over) return
+        over = true
+        angle.set(0)
+        rested(angle)
+      }
+    })
+  }
+
+  // Brings the slots up to date with this render
+  const sync = () => {
+    // The fronts now carry the letters their copies turned to, so the slots
+    // go back to rest, in the same frame and looking the same
+    const landed = landing.current
+    landing.current = false
+    const changed = word !== latest.current.join('')
+    latest.current = letters
+    const bringing = faces.back
+    faces.front = next.front
+    faces.back = next.back
+    if (landed || still) moved.clear()
+
+    // Slots that are gone stop turning and their angles are dropped, so a
+    // slot that comes back later starts at rest
+    angles.splice(next.front.length).forEach((a) => {
+      moved.delete(a)
+      a.stop()
+    })
+    if (landed || still) {
+      angles.forEach((angle) => {
+        angle.stop()
+        if (angle.get() !== 0) angle.jump(0)
+      })
+    }
+    if (still) return
+
+    // Where each slot starts along its row, on the front faces and on the
+    // copies. Measured when either row has changed and they differ, since a
+    // letter of another width pushes along the ones after it.
+    const reflowed =
+      landed ||
+      bringing.length !== next.back.length ||
+      next.back.some((char, i) => char !== bringing[i])
+    const starts =
+      reflowed &&
+      next.front.some((char, i) => char !== next.back[i]) &&
+      [width.front.current!, width.back.current!].map(offsets)
+
+    // Slots whose letter changed turn to it, in the usual stagger, and so do
+    // letters pushed along by them. Ones that were still turning when the
+    // text changed follow on once they can, staggered from the first of them.
+    let first = -1
+    next.front.forEach((char, i) => {
+      const angle = angles[i]
+      // Its copy is on screen, so nothing about it can change now
+      if (angle.get() !== 0) return
+      if (reflowed) {
+        if (starts && Math.abs(starts[0][i] - starts[1][i]) > 0.5)
+          moved.add(angle)
+        else moved.delete(angle)
+      }
+      const needed = char !== next.back[i] || moved.has(angle)
+      if (turning.has(angle)) {
+        // Waiting its turn, with nothing left to turn to
+        if (!needed && !hovered.has(angle)) angle.stop()
+      } else if (needed) {
+        if (first < 0) first = changed ? 0 : i
+        turn(angle, i, (i - first) * stagger)
+      }
+    })
+  }
 
   useIsomorphicLayoutEffect(() => {
-    // Letters that are gone stop turning and their angles are dropped, so a
-    // letter that comes back later starts at rest
-    angles.splice(letters.length).forEach((a) => a.stop())
+    syncing.current = true
+    try {
+      sync()
+    } finally {
+      syncing.current = false
+    }
+    finish()
 
-    // Only the letters on screen turn, not any a render in progress added
-    const turning = angles.slice()
+    // Only the slots on screen turn, not any a render in progress added
+    const slots = angles.slice()
     startRef.current = () => {
       // Letters still turning finish first
-      if (turning.some((a) => a.isAnimating())) return
-      turning.forEach((angle, i) =>
-        animateValue(angle, -90, {
-          ...rollSpring(duration(i)),
-          delay: i * stagger,
-          // The copy is showing now. Put the front face back, which looks
-          // the same, so selecting text and the next flip start from there.
-          onComplete: () => angle.jump(0),
-          // A turn cut short, say because the letter was hidden, goes back
-          // to rest rather than staying frozen part way round
-          onStop: () => angle.set(0)
-        })
-      )
+      if (turning.size || landing.current) return
+      slots.forEach((angle, i) => {
+        hovered.add(angle)
+        turn(angle, i, i * stagger)
+      })
     }
   })
-
-  const word = letters.join('')
-  const width = useEasedWidth(word, duration(0), still)
 
   React.useEffect(
     () => () => {
@@ -267,7 +412,7 @@ const RollFaces = ({
   return (
     <React.Fragment>
       <div className={styles.front} ref={width.front}>
-        {letters.map((char, i) => (
+        {next.front.map((char, i) => (
           <RollLetter key={i} char={char} angle={angles[i]} offset={0} />
         ))}
       </div>
@@ -276,7 +421,7 @@ const RollFaces = ({
         aria-hidden='true'
         ref={width.back}
       >
-        {letters.map((char, i) => (
+        {next.back.map((char, i) => (
           <RollLetter key={i} char={char} angle={angles[i]} offset={90} />
         ))}
       </div>
@@ -287,39 +432,104 @@ const RollFaces = ({
   )
 }
 
+interface Faces {
+  front: string[]
+  back: string[]
+}
+
+// What each slot shows once the text is `letters`; a slot past its end is
+// blank. A slot takes the new letter on its copy, and turns to it, while its
+// copy is out of sight and so are those of the slots after it, which a
+// letter of another width would push along. That is, at rest or waiting for
+// its turn in the stagger, after every slot that is turning or has turned.
+// The others keep the letters they are bringing, and take the newest once
+// every slot has landed. Blank slots at the end go once they have come to
+// rest.
+const plan = (
+  faces: Faces,
+  letters: string[],
+  angles: Angle[],
+  landing: boolean
+): Faces => {
+  const front: string[] = []
+  const back: string[] = []
+  const count = Math.max(letters.length, faces.front.length)
+  // The last slot whose copy is on screen
+  let shown = -1
+  for (let i = 0; i < faces.front.length && i < angles.length; i++) {
+    if (angles[i].get() !== 0) shown = i
+  }
+  for (let i = 0; i < count; i++) {
+    const bringing = i < faces.back.length ? faces.back[i] : ''
+    const free = landing || i > shown
+    front.push(
+      landing ? bringing : i < faces.front.length ? faces.front[i] : ''
+    )
+    back.push(free ? (i < letters.length ? letters[i] : '') : bringing)
+  }
+  while (
+    front.length > letters.length &&
+    !front[front.length - 1] &&
+    !back[back.length - 1]
+  ) {
+    front.pop()
+    back.pop()
+  }
+  return { front, back }
+}
+
+// How far along its row each letter starts, from the row's start edge. The
+// rows of front faces and copies start at the same place.
+const offsets = (row: HTMLElement) => {
+  let along = 0
+  return Array.from(row.children, (letter) => {
+    const start = along
+    along += parseFloat(getComputedStyle(letter).width) || 0
+    return start
+  })
+}
+
 // The in-flow placeholder sizes the roll. When the word changes it is held at
-// the old word's width and eased to the new one's. At rest none of this is
-// set, so the roll lays out exactly as it always has. Written straight to the
-// DOM, so the easing costs no renders.
-const useEasedWidth = (word: string, seconds: number, still: boolean) => {
+// the old word's width and eased to the new one's. While letters turn to new
+// text (`holding`), it is held as wide as the wider of the words on their
+// faces, so a shorter word keeps the old one's room until its letters have
+// turned away. At rest none of this is set, so the roll lays out exactly as it
+// always has. Written straight to the DOM, so the easing costs no renders.
+const useEasedWidth = (
+  size: string,
+  holding: boolean,
+  seconds: number,
+  still: boolean
+) => {
   const placeholder = React.useRef<HTMLDivElement>(null)
   const front = React.useRef<HTMLDivElement>(null)
   const back = React.useRef<HTMLDivElement>(null)
   const [eased] = React.useState(() => motionValue(0))
-  // The placeholder's width at rest, kept current as fonts load or the page
+  // The placeholder's width, kept current as fonts load or the page
   // restyles, so a change eases from the width that was really on screen
   const natural = React.useRef(NaN)
-  // Where the width is heading, whether the letters run right to left, and
-  // a quarter of an em in pixels
-  const heading = React.useRef({ to: 0, rtl: false, reach: 0 })
+  // How wide the rows of letters are at rest (the fronts can still carry the
+  // old word), whether they run right to left, and a quarter of an em in
+  // pixels
+  const heading = React.useRef({ rows: [0, 0], rtl: false, reach: 0 })
 
   const paint = (px: number) => {
     if (!placeholder.current || !front.current || !back.current) return
     placeholder.current.style.width = `${px}px`
     // Letters past the box's edge are cut off, so a longer word is uncovered
     // as the box widens instead of being drawn over the text beside it. The
-    // cut is measured back from where the letters end at rest. Over the last
-    // quarter of an em it moves out past them by that much again, so a glyph
-    // that reaches past its letter isn't still cut off when the width lets
-    // go, and can't pop into view.
-    const { to, rtl, reach } = heading.current
-    const left = Math.max(0, to - px)
-    const cut = left < reach ? 2 * left - reach : left
-    const clip = rtl
-      ? `inset(-1000px -1000px -1000px ${cut}px)`
-      : `inset(-1000px ${cut}px -1000px -1000px)`
-    front.current.style.clipPath = clip
-    back.current.style.clipPath = clip
+    // cut is measured back from where each row's letters end at rest. Over
+    // the last quarter of an em it moves out past them by that much again, so
+    // a glyph that reaches past its letter isn't still cut off when the width
+    // lets go, and can't pop into view.
+    const { rows, rtl, reach } = heading.current
+    ;[front.current, back.current].forEach((row, i) => {
+      const left = Math.max(0, rows[i] - px)
+      const cut = left < reach ? 2 * left - reach : left
+      row.style.clipPath = rtl
+        ? `inset(-1000px -1000px -1000px ${cut}px)`
+        : `inset(-1000px ${cut}px -1000px -1000px)`
+    })
   }
   const release = () => {
     for (const el of [placeholder.current, front.current, back.current]) {
@@ -328,7 +538,7 @@ const useEasedWidth = (word: string, seconds: number, still: boolean) => {
   }
 
   useIsomorphicLayoutEffect(() => {
-    if (still || !(seconds > 0)) {
+    if (still) {
       eased.stop()
       release()
       return
@@ -338,31 +548,47 @@ const useEasedWidth = (word: string, seconds: number, still: boolean) => {
     el.style.width = ''
     // Not a number on the first render or while the roll isn't laid out,
     // say inside something hidden; then there is nothing to ease between
-    const to = parseFloat(getComputedStyle(el).width)
+    const word = parseFloat(getComputedStyle(el).width)
+    const rows = [front.current!, back.current!].map((row) =>
+      parseFloat(getComputedStyle(row).width)
+    )
+    // The rows are letters laid side by side, which the placeholder's text
+    // may kern closer, so it is held open by however much wider the front
+    // row is than the copies
+    const to = holding ? word + Math.max(0, rows[0] - rows[1] || 0) : word
     natural.current = to
-    if (!(Math.abs(to - from) >= WIDTH_REST)) {
+    const held = to - word >= WIDTH_REST
+    // With no time for the first letter, the width changes at once
+    const easing = seconds > 0 && Math.abs(to - from) >= WIDTH_REST
+    if (!easing && !held) {
       eased.stop()
       release()
       return
     }
     const { direction, fontSize } = getComputedStyle(el)
     heading.current = {
-      to,
+      rows,
       rtl: direction === 'rtl',
       reach: parseFloat(fontSize) / 4 || 0
     }
     // Held narrower than its text, the placeholder must not wrap to a
     // second line and grow taller
     el.style.whiteSpace = 'nowrap'
+    if (!easing) {
+      eased.stop()
+      paint(to)
+      return
+    }
     const velocity = eased.isAnimating() ? eased.getVelocity() : 0
     if (!eased.isAnimating()) eased.jump(from)
     paint(eased.get())
     animateValue(eased, to, {
       ...widthSpring(seconds, to - eased.get(), velocity),
       onUpdate: paint,
-      onComplete: release
+      // Held open, it stays at the width it reached
+      onComplete: held ? undefined : release
     })
-  }, [word, still])
+  }, [size, still])
 
   // Stopped as the roll is taken down, before its elements are let go
   useIsomorphicLayoutEffect(() => () => eased.stop(), [])
