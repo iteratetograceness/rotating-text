@@ -156,19 +156,20 @@
   transform: rotateX(180deg);
 }
 
-.shade {
+/* The falling flap's shadow on the bottom half grows down from the hinge,
+   with a soft leading edge. While the flap turns it has a layer of its
+   own, so growing and fading it never repaints the tile. */
+.shadow {
   position: absolute;
   inset: 0;
-  background: #000;
+  top: 50%;
   opacity: 0;
   pointer-events: none;
-}
-
-/* The falling flap's shadow on the bottom half grows down from the hinge,
-   with a soft leading edge. */
-.shadow {
-  top: 50%;
   transform: scaleY(0);
   transform-origin: top;
   background: linear-gradient(to bottom, #000 70%, transparent);
+}
+
+.tile[data-turning] .shadow {
+  will-change: transform, opacity;
 }
