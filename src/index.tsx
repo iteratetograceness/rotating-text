@@ -569,8 +569,8 @@ const useEasedWidth = (
     const rows = [front.current!, back.current!].map((row) =>
       parseFloat(getComputedStyle(row).width)
     )
-    // The rows are letters laid side by side, which the placeholder's text
-    // may kern closer, so it is held open by however much wider the front
+    // The rows round each letter's box, so they can be a hair wider than the
+    // placeholder's text; it is held open by however much wider the front
     // row is than the copies
     const to = holding ? word + Math.max(0, rows[0] - rows[1] || 0) : word
     natural.current = to
