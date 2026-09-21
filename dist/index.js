@@ -9090,7 +9090,7 @@ var FlapTile = function FlapTile(_ref6) {
       onUpdate: function onUpdate(rotateX) {
         if (!falling.current && rotateX < 0) {
           falling.current = true;
-          setFaces(function (f) {
+          if (bringing.current !== shown.current) setFaces(function (f) {
             return _extends({}, f, {
               falling: true
             });

@@ -653,9 +653,12 @@ const FlapTile = ({
       ease: fallEase,
       onUpdate: (rotateX: number) => {
         if (!falling.current && rotateX < 0) {
-          // Too late to change letters now; the tile makes room for both
+          // Too late to change letters now; the tile makes room for both. A
+          // letter flipping over itself (a hover) renders the same either
+          // way, so it skips the render.
           falling.current = true
-          setFaces((f) => ({ ...f, falling: true }))
+          if (bringing.current !== shown.current)
+            setFaces((f) => ({ ...f, falling: true }))
         }
         paint(rotateX)
       },
