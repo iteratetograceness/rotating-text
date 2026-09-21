@@ -616,6 +616,10 @@ const useEasedWidth = (
     if (still) {
       eased.stop()
       release()
+      // The width it had isn't the width now, so should reduced motion be
+      // turned off, the next change has nothing to ease from until the
+      // observer below measures it
+      natural.current = NaN
       return
     }
     const el = placeholder.current!

@@ -369,6 +369,7 @@ var useIsomorphicLayoutEffect = typeof document !== 'undefined' ? React.useLayou
 var prefersReducedMotion = {
   current: null
 };
+var reducedMotionFollowers = new Set();
 var hasReducedMotionListener = false;
 var initPrefersReducedMotion = function initPrefersReducedMotion() {
   hasReducedMotionListener = true;
@@ -377,8 +378,11 @@ var initPrefersReducedMotion = function initPrefersReducedMotion() {
     var query = window.matchMedia('(prefers-reduced-motion)');
     var setPreference = function setPreference() {
       prefersReducedMotion.current = query.matches;
+      reducedMotionFollowers.forEach(function (follow) {
+        return follow();
+      });
     };
-    query.addListener(setPreference);
+    if (query.addEventListener) query.addEventListener('change', setPreference);else query.addListener(setPreference);
     setPreference();
   } else {
     prefersReducedMotion.current = false;
@@ -387,7 +391,18 @@ var initPrefersReducedMotion = function initPrefersReducedMotion() {
 var useReducedMotion = function useReducedMotion() {
   if (!hasReducedMotionListener) initPrefersReducedMotion();
   var _React$useState = React.useState(prefersReducedMotion.current),
-    shouldReduceMotion = _React$useState[0];
+    shouldReduceMotion = _React$useState[0],
+    setShouldReduceMotion = _React$useState[1];
+  React.useEffect(function () {
+    var follow = function follow() {
+      return setShouldReduceMotion(prefersReducedMotion.current);
+    };
+    reducedMotionFollowers.add(follow);
+    if (prefersReducedMotion.current !== shouldReduceMotion) follow();
+    return function () {
+      reducedMotionFollowers["delete"](follow);
+    };
+  }, []);
   return shouldReduceMotion;
 };
 var isPrimaryPointer = function isPrimaryPointer(event) {
@@ -404,29 +419,33 @@ var useHover = function useHover(ref, onHoverStart, scale) {
       scale: scale
     };
   });
+  var resize = React.useRef();
   React.useEffect(function () {
     var el = ref.current;
     var size = new MotionValue(1);
-    var hovered = false;
+    var over = false;
+    var target = 1;
+    resize.current = function () {
+      var scale = latest.current.scale;
+      var next = over && scale !== undefined ? scale : 1;
+      if (next === target) return;
+      target = next;
+      animate(size, next, {
+        type: 'spring',
+        stiffness: 550,
+        damping: 30,
+        restSpeed: 10,
+        onUpdate: function onUpdate(v) {
+          el.style.transform = v === 1 ? 'none' : "scale(" + v + ") translateZ(0)";
+        }
+      });
+    };
     var hover = function hover(active) {
       return function (event) {
         if (!isPrimaryPointer(event)) return;
-        var _latest$current = latest.current,
-          onHoverStart = _latest$current.onHoverStart,
-          scale = _latest$current.scale;
-        if (scale !== undefined && hovered !== active) {
-          hovered = active;
-          animate(size, active ? scale : 1, {
-            type: 'spring',
-            stiffness: 550,
-            damping: 30,
-            restSpeed: 10,
-            onUpdate: function onUpdate(v) {
-              el.style.transform = v === 1 ? 'none' : "scale(" + v + ") translateZ(0)";
-            }
-          });
-        }
-        if (active) onHoverStart();
+        over = active;
+        resize.current();
+        if (active) latest.current.onHoverStart();
       };
     };
     var enter = hover(true);
@@ -439,6 +458,9 @@ var useHover = function useHover(ref, onHoverStart, scale) {
       size.stop();
     };
   }, []);
+  useIsomorphicLayoutEffect(function () {
+    if (resize.current) resize.current();
+  }, [scale]);
 };
 
 var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","text":"_32Dfs","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK","shadow":"_3IP-G"};
@@ -856,6 +878,7 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, span, still) 
     if (still) {
       eased.stop();
       release();
+      natural.current = NaN;
       return;
     }
     var el = placeholder.current;
