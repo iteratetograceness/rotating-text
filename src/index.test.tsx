@@ -13,6 +13,7 @@ afterEach(() => {
   observers.splice(0).forEach((observer) => observer.disconnect())
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 // Calls `record` every time the element's style changes
@@ -44,14 +45,28 @@ const letterWidths = () => {
 
 const px = (value: string) => parseFloat(value)
 
-// A roll letter's angle. At rest a front face is flat, with no rotateX, and
-// its copy is folded away a quarter turn on.
-const REST: Record<string, number> = { 'perspective(4em)': 0, 'scaleY(0)': 90 }
-const angle = (el: HTMLElement) => {
+// A roll letter's angle. A face facing the viewer is flat, with no rotateX.
+// A face faded out is folded to nothing, so its angle is read from the other
+// face of its slot, a quarter turn from it.
+const faceAngle = (el: HTMLElement) => {
   const turned = /rotateX\(([-\d.e]+)deg\)/.exec(el.style.transform)
   if (turned) return Number(turned[1])
-  expect(Object.keys(REST)).toContain(el.style.transform)
-  return REST[el.style.transform]
+  if (el.style.transform === 'perspective(4em)') return 0
+  expect(el.style.transform).toBe('scaleY(0)')
+  expect(el.style.opacity).toBe('0')
+  return NaN
+}
+const angle = (el: HTMLElement): number => {
+  const own = faceAngle(el)
+  if (!Number.isNaN(own)) return own
+  const row = el.parentElement!
+  const rows = Array.from(row.parentElement!.children)
+  const copy = row.classList.contains(styles.back)
+  const other = rows[rows.indexOf(row) + (copy ? -1 : 1)]
+  const partner = other.children[Array.from(row.children).indexOf(el)]
+  const turned = faceAngle(partner as HTMLElement)
+  expect(turned).not.toBeNaN()
+  return copy ? turned + 90 : turned - 90
 }
 
 // jsdom applies no stylesheet, so tests that depend on it read the rules
@@ -202,21 +217,29 @@ describe('RotatingText', () => {
     const frontLetter = front.querySelector('span')!
     const backLetter = back.querySelector('span')!
 
-    // Record the pair of angles every time the front letter moves
+    // Record the pair of angles every time either face moves. (A face that
+    // has faded out is folded away and stays still, and reads as NaN here.)
     const seen: [number, number][] = []
-    watch(frontLetter, () => seen.push([angle(frontLetter), angle(backLetter)]))
+    const record = () =>
+      seen.push([faceAngle(frontLetter), faceAngle(backLetter)])
+    watch(frontLetter, record)
+    watch(backLetter, record)
 
     fireEvent.pointerEnter(container.firstElementChild!)
-    await waitFor(() => expect(seen.some(([f]) => f < -85)).toBe(true))
+    await waitFor(() => expect(seen.some(([, b]) => b < 0)).toBe(true))
     await waitFor(() => {
       expect(angle(frontLetter)).toBe(0)
       expect(frontLetter.style.opacity).toBe('1')
     })
 
-    // The copy stays joined to the front face a quarter turn behind it
-    for (const [f, b] of seen) expect(b - f).toBeCloseTo(90)
-    // It swings past the next face before it settles
-    expect(Math.min(...seen.map(([f]) => f))).toBeLessThan(-92)
+    // While both faces show, the copy stays joined to the front face a
+    // quarter turn behind it
+    const both = seen.filter(([f, b]) => !Number.isNaN(f + b))
+    expect(both.length).toBeGreaterThan(2)
+    for (const [f, b] of both) expect(b - f).toBeCloseTo(90)
+    // The copy swings past facing front before it settles
+    const copy = seen.map(([, b]) => b).filter((b) => !Number.isNaN(b))
+    expect(Math.min(...copy)).toBeLessThan(-2)
     expect(angle(backLetter)).toBe(90)
     expect(backLetter.style.opacity).toBe('0')
   })
@@ -247,17 +270,91 @@ describe('RotatingText', () => {
     })
   })
 
+  // Nor does one that has turned while the rest of the row turns after it:
+  // it waits flat on its copy, its front folded away, until the row lands
+  it('keeps a letter that has turned flat until the row lands', async () => {
+    const props = { timing: 0.1, stagger: 0.3 }
+    const { container, rerender } = render(
+      <RotatingText text='ab' {...props} />
+    )
+    const [, front, back] = Array.from(container.firstElementChild!.children)
+    const [a, b] = Array.from(front.children) as HTMLElement[]
+    const [aCopy, bCopy] = Array.from(back.children) as HTMLElement[]
+    rerender(<RotatingText text='cd' {...props} />)
+
+    await waitFor(() => expect(aCopy.style.transform).toBe('perspective(4em)'))
+    expect(aCopy.style.opacity).toBe('1')
+    expect(a.style.transform).toBe('scaleY(0)')
+    expect(angle(a)).toBe(-90)
+    // The second letter is still waiting its turn
+    expect(front.textContent).toBe('ab')
+    expect(b.style.transform).toBe('perspective(4em)')
+    expect(bCopy.style.transform).toBe('scaleY(0)')
+
+    await waitFor(() => expect(front.textContent).toBe('cd'))
+    for (const face of [a, b])
+      expect(face.style.transform).toBe('perspective(4em)')
+    for (const face of [aCopy, bCopy])
+      expect(face.style.transform).toBe('scaleY(0)')
+  })
+
+  // The depth is written into the transform as the stylesheet gives it,
+  // which the browser restyles faster than var(). One a transform can't
+  // take is left to the browser as var().
+  it('turns about the depth the stylesheet gives the letters', async () => {
+    const real = window.getComputedStyle
+    let depth = '0.5lh'
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+      const style = real.call(window, el, pseudo)
+      if (!String(el.getAttribute('class')).includes('face')) return style
+      return new Proxy(style, {
+        get: (target, key) =>
+          key === 'getPropertyValue'
+            ? (name: string) =>
+                name === '--rt-depth'
+                  ? ` ${depth}`
+                  : target.getPropertyValue(name)
+            : (target as any)[key]
+      })
+    })
+    vi.stubGlobal('CSS', { supports: (_: string, v: string) => !/%/.test(v) })
+    const { container } = render(
+      <RotatingText text='h' timing={0.3} stagger={0} />
+    )
+    const roll = container.firstElementChild!
+    const [, front] = Array.from(roll.children)
+    const h = front.firstElementChild as HTMLElement
+    const turning = () => /rotateX/.test(h.style.transform)
+    const settled = () => h.style.transform === 'perspective(4em)'
+
+    fireEvent.pointerEnter(roll)
+    await waitFor(() => expect(turning()).toBe(true))
+    expect(h.style.transform).toMatch(
+      /^perspective\(4em\) translateZ\(calc\(-1 \* 0\.5lh\)\) rotateX\([-\d.e]+deg\) translateZ\(0\.5lh\)$/
+    )
+    await waitFor(() => expect(settled()).toBe(true))
+
+    depth = '50%'
+    fireEvent.pointerLeave(roll)
+    fireEvent.pointerEnter(roll)
+    await waitFor(() => expect(turning()).toBe(true))
+    expect(h.style.transform).toMatch(/translateZ\(var\(--rt-depth\)\)$/)
+  })
+
   it('carries on to the next face through a second hover', async () => {
     const { container } = render(
       <RotatingText text='hi' timing={0.3} stagger={0.01} />
     )
     const root = container.firstElementChild!
-    const frontLetter = container.querySelector('span')!
+    const [, front, copies] = Array.from(root.children)
+    const frontLetter = front.querySelector('span')!
     fireEvent.pointerEnter(root)
     await waitFor(() => expect(angle(frontLetter)).toBeLessThan(-30))
 
     const seen: number[] = []
-    watch(frontLetter, () => seen.push(angle(frontLetter)))
+    const record = () => seen.push(angle(frontLetter))
+    watch(frontLetter, record)
+    watch(copies.querySelector('span')!, record)
     fireEvent.pointerLeave(root)
     fireEvent.pointerEnter(root)
     await waitFor(() => expect(angle(frontLetter)).toBe(0))
@@ -724,6 +821,34 @@ describe('RotatingText', () => {
     )
     expect(swaps()).toEqual([])
     expect(unpainted).toContain('c')
+  })
+
+  it('holds room for the letters the copies are still turning to', async () => {
+    letterWidths()
+    const props = { timing: 0.4, stagger: 0.1 }
+    const { container, rerender } = render(
+      <RotatingText text='hi' {...props} />
+    )
+    const [, front, back, placeholder] = Array.from(
+      container.firstElementChild!.children
+    ) as HTMLElement[]
+    rerender(<RotatingText text='WWWW' {...props} />)
+    await waitFor(() =>
+      expect(angle(front.querySelector('span')!)).toBeLessThan(-30)
+    )
+    const seen: number[] = []
+    watch(placeholder, () => {
+      if (front.textContent === 'hi') seen.push(px(placeholder.style.width))
+    })
+    rerender(<RotatingText text='a' {...props} />)
+
+    // The first slot is still turning to its W, so the roll keeps the W's
+    // room rather than easing to the new word's while it is on screen
+    expect(back.textContent).toBe('W')
+    await waitFor(() => expect(front.textContent).not.toBe('hi'))
+    expect(seen.length).toBeGreaterThan(3)
+    for (const width of seen) expect(width).toBeGreaterThanOrEqual(20)
+    await waitFor(() => expect(front.textContent).toBe('a'))
   })
 
   it('carries on from the width it has reached when the text changes again', async () => {

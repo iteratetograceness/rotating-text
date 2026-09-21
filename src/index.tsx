@@ -46,19 +46,46 @@ const rollSpring = (seconds: number) => {
 }
 // The turn is about an axis set back behind the letter by --rt-depth. The
 // perspective sits outside that offset, so a letter at rest is drawn at its
-// true size rather than magnified.
-const rollTransform = (rotateX: number) =>
-  `perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(${rotateX}deg) translateZ(var(--rt-depth))`
-// A letter only turns in 3D while it is moving. At rest it keeps the same
-// matrix with the turn left out, which draws its text exactly as the turn
-// does at 0 degrees, but with no 3D step in it the browser doesn't give each
-// letter a layer of its own. (A flat transform such as translate(0) moves
-// the text's anti-aliasing, and none would cost a layout per letter each
-// time a turn starts.) The copy, a quarter turn away and faded out, is
-// folded to nothing, as it was edge on.
-const rollRest = (offset: number) => (offset ? 'scaleY(0)' : 'perspective(4em)')
+// true size rather than magnified. `depth` is the stylesheet's --rt-depth
+// written out (see readDepth), which is cheaper for the browser to restyle
+// every frame than var() is.
+const rollTransform = (rotateX: number, depth: string) =>
+  `perspective(4em) translateZ(calc(-1 * ${depth})) rotateX(${rotateX}deg) translateZ(${depth})`
 const ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85]
 const ROLL_SHADE = [0, 0.75, 1, 0.75, 0]
+// A face is dimmed as it turns away from the viewer, as if lit from the
+// front, and is gone by the time it is edge on.
+const rollShade = interpolate(ROLL_SHADE_ANGLES, ROLL_SHADE)
+// A face is only drawn in 3D while it is turned and can be seen. Facing the
+// viewer it keeps the same matrix with the turn left out, which draws its
+// text exactly as the turn does at 0 degrees, but with no 3D step in it the
+// browser doesn't give each letter a layer of its own. (A flat transform such
+// as translate(0) moves the text's anti-aliasing, and none would cost a
+// layout per letter each time a turn starts.) Faded out, it is folded to
+// nothing, as it would be edge on. So a letter that has turned and waits for
+// the rest of the row faces the viewer on its copy, off a layer too.
+const rollPose = (turned: number, shade: number, depth: string) =>
+  turned === 0
+    ? 'perspective(4em)'
+    : shade
+    ? rollTransform(turned, depth)
+    : 'scaleY(0)'
+
+// The letters turn about the depth the stylesheet gives them, read once for
+// a batch of turns. A page can't restyle it on the fly, as the letters set it
+// themselves. Anything a transform can't take is left to the browser as var()
+// instead, as it always was.
+const DEPTH = 'var(--rt-depth)'
+const readDepth = (row: HTMLElement | null) => {
+  const face = row && row.firstElementChild
+  const depth = face && getComputedStyle(face).getPropertyValue('--rt-depth')
+  const literal = depth && depth.trim()
+  return literal &&
+    typeof CSS !== 'undefined' &&
+    CSS.supports('transform', rollTransform(0, literal))
+    ? literal
+    : DEPTH
+}
 
 // When the text changes, the roll's width eases from the old word's to the
 // new one's, so text beside it glides along rather than jumping. The spring
@@ -249,6 +276,8 @@ const RollFaces = ({
   const syncing = React.useRef(false)
   // The text as of the last commit
   const latest = React.useRef(letters)
+  // The depth the letters turn about, read before each batch of turns
+  const depth = React.useRef(DEPTH)
   const [, rerender] = React.useReducer((n: number) => n + 1, 0)
   // Renders again once the angle has let go of the turn that just ended, so a
   // turn that render starts on the same angle is its own
@@ -265,6 +294,8 @@ const RollFaces = ({
     [word, was, coming].join('\n'),
     was !== word || coming !== word,
     duration(0),
+    // How long until the last slot starts to turn
+    Math.max(0, (next.back.length - 1) * stagger),
     still
   )
 
@@ -379,7 +410,10 @@ const RollFaces = ({
         // Waiting its turn, with nothing left to turn to
         if (!needed && !hovered.has(angle)) angle.stop()
       } else if (needed) {
-        if (first < 0) first = changed ? 0 : i
+        if (first < 0) {
+          first = changed ? 0 : i
+          depth.current = readDepth(width.front.current)
+        }
         turn(angle, i, (i - first) * stagger)
       }
     })
@@ -412,6 +446,7 @@ const RollFaces = ({
     startRef.current = () => {
       // Letters still turning finish first
       if (turning.size || landing.current) return
+      depth.current = readDepth(width.front.current)
       slots.forEach((angle, i) => {
         hovered.add(angle)
         turn(angle, i, i * stagger)
@@ -434,12 +469,24 @@ const RollFaces = ({
       </div>
       <div className={styles.front} aria-hidden='true' ref={width.front}>
         {next.front.map((char, i) => (
-          <RollLetter key={i} char={char} angle={angles[i]} offset={0} />
+          <RollLetter
+            key={i}
+            char={char}
+            angle={angles[i]}
+            offset={0}
+            depth={depth}
+          />
         ))}
       </div>
       <div className={styles.back} aria-hidden='true' ref={width.back}>
         {next.back.map((char, i) => (
-          <RollLetter key={i} char={char} angle={angles[i]} offset={90} />
+          <RollLetter
+            key={i}
+            char={char}
+            angle={angles[i]}
+            offset={90}
+            depth={depth}
+          />
         ))}
       </div>
       <div className={styles.placeholder} ref={width.placeholder}>
@@ -520,6 +567,7 @@ const useEasedWidth = (
   size: string,
   holding: boolean,
   seconds: number,
+  span: number,
   still: boolean
 ) => {
   const placeholder = React.useRef<HTMLDivElement>(null)
@@ -575,10 +623,18 @@ const useEasedWidth = (
     const rows = [front.current!, back.current!].map((row) =>
       parseFloat(getComputedStyle(row).width)
     )
-    // The rows round each letter's box, so they can be a hair wider than the
-    // placeholder's text; it is held open by however much wider the front
-    // row is than the copies
-    const to = holding ? word + Math.max(0, rows[0] - rows[1] || 0) : word
+    // While the copies carry the word, it is held open by however much wider
+    // the front row is than the copies. (The rows round each letter's box, so
+    // they can be a hair wider than the placeholder's text.) After another
+    // change mid-turn, the copies already on screen still carry the text
+    // before it, so it is held as wide as the widest row, and never narrows
+    // under them.
+    const mixed = holding && back.current!.textContent !== el.textContent
+    const to = !holding
+      ? word
+      : mixed
+      ? Math.max(word, rows[0] || 0, rows[1] || 0)
+      : word + Math.max(0, rows[0] - rows[1] || 0)
     natural.current = to
     const held = to - word >= WIDTH_REST
     // With no time for the first letter, the width changes at once
@@ -607,8 +663,14 @@ const useEasedWidth = (
     const velocity = eased.isAnimating() ? eased.getVelocity() : 0
     if (!eased.isAnimating()) eased.jump(from)
     paint(eased.get())
+    // With copies still carrying older text, the copies' row only reaches its
+    // full width once its last letter turns in, and each further change moves
+    // it again, so the width eases there over the time until then. Changes
+    // in quick succession then carry it along gently rather than swinging it
+    // after every word.
+    const time = mixed ? Math.max(seconds, span) : seconds
     animateValue(eased, to, {
-      ...widthSpring(seconds, to - eased.get(), velocity),
+      ...widthSpring(time, to - eased.get(), velocity),
       onUpdate: paint,
       // Held open, it stays at the width it reached
       onComplete: held ? undefined : release
@@ -644,11 +706,8 @@ interface RollLetterProps {
   char: string
   angle: Angle
   offset: number
+  depth: React.MutableRefObject<string>
 }
-
-// A face dims as it turns away from the viewer, as if lit from the front,
-// and is gone by the time it is edge on.
-const rollShade = interpolate(ROLL_SHADE_ANGLES, ROLL_SHADE)
 
 // A plain span that follows its angle by writing its own style, so a turning
 // letter costs no React work per frame and a text change re-renders only the
@@ -656,19 +715,28 @@ const rollShade = interpolate(ROLL_SHADE_ANGLES, ROLL_SHADE)
 const RollLetter = React.memo(function RollLetter({
   char,
   angle,
-  offset
+  offset,
+  depth
 }: RollLetterProps) {
   const face = React.useRef<HTMLSpanElement>(null)
 
   useIsomorphicLayoutEffect(() => {
+    // What the face shows, so one held folded or facing the viewer isn't
+    // restyled every frame
+    let pose = face.current!.style.transform
+    let shade = face.current!.style.opacity
     const follow = (a: number) => {
       const el = face.current
       if (!el) return
-      el.style.transform = a ? rollTransform(a + offset) : rollRest(offset)
-      el.style.opacity = String(rollShade(a + offset))
+      const turned = a + offset
+      const opacity = rollShade(turned)
+      const next = rollPose(turned, opacity, depth.current)
+      if (next !== pose) el.style.transform = pose = next
+      if (String(opacity) !== shade) el.style.opacity = shade = String(opacity)
     }
-    // The markup already draws the face at rest
-    if (angle.get() !== 0) follow(angle.get())
+    // Catches up with a turn it missed while it wasn't listening, say one
+    // cut short while the roll was hidden
+    follow(angle.get())
     return angle.on('change', follow)
   }, [angle, offset])
 
@@ -679,7 +747,10 @@ const RollLetter = React.memo(function RollLetter({
     <span
       className={styles.face}
       ref={face}
-      style={{ transform: rollRest(offset), opacity: rollShade(offset) }}
+      style={{
+        transform: rollPose(offset, rollShade(offset), DEPTH),
+        opacity: rollShade(offset)
+      }}
     >
       {char}
     </span>
