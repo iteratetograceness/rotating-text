@@ -428,9 +428,10 @@ export const transform = (
 export const useIsomorphicLayoutEffect =
   typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect
 
-// Whether the device asks for reduced motion, as it did when the component
-// mounted; null on the server
+// Whether the device asks for reduced motion; null on the server
 const prefersReducedMotion: { current: boolean | null } = { current: null }
+// Components to tell when the setting changes
+const reducedMotionFollowers = new Set<() => void>()
 let hasReducedMotionListener = false
 const initPrefersReducedMotion = () => {
   hasReducedMotionListener = true
@@ -439,17 +440,36 @@ const initPrefersReducedMotion = () => {
     const query = window.matchMedia('(prefers-reduced-motion)')
     const setPreference = () => {
       prefersReducedMotion.current = query.matches
+      reducedMotionFollowers.forEach((follow) => follow())
     }
-    query.addListener(setPreference)
+    // addListener for Safari before 14
+    if (query.addEventListener) query.addEventListener('change', setPreference)
+    else query.addListener(setPreference)
     setPreference()
   } else {
     prefersReducedMotion.current = false
   }
 }
 
+// Framer reads the setting once, as the component mounts. This starts from
+// the same value, so a server render and the first render are unchanged, but
+// then follows the setting as the reader turns it on or off, where framer
+// kept the first value until a remount.
 export const useReducedMotion = () => {
   if (!hasReducedMotionListener) initPrefersReducedMotion()
-  const [shouldReduceMotion] = React.useState(prefersReducedMotion.current)
+  const [shouldReduceMotion, setShouldReduceMotion] = React.useState(
+    prefersReducedMotion.current
+  )
+  React.useEffect(() => {
+    const follow = () => setShouldReduceMotion(prefersReducedMotion.current)
+    reducedMotionFollowers.add(follow)
+    // It may have changed between the first render and now. Only then is it
+    // set, so a mount never costs a second render.
+    if (prefersReducedMotion.current !== shouldReduceMotion) follow()
+    return () => {
+      reducedMotionFollowers.delete(follow)
+    }
+  }, [])
   return shouldReduceMotion
 }
 
@@ -472,27 +492,36 @@ export const useHover = (
     latest.current = { onHoverStart, scale }
   })
 
+  // Moves the element to the size it should be at now
+  const resize = React.useRef<() => void>()
+
   React.useEffect(() => {
     const el = ref.current!
     const size = new MotionValue(1)
-    // Scaled up, or on its way. A leave with no enter before it does nothing.
-    let hovered = false
+    // Whether the pointer is over the element, and the size it was last sent
+    // toward. A leave with no enter before it does nothing.
+    let over = false
+    let target = 1
+    resize.current = () => {
+      const { scale } = latest.current
+      const next = over && scale !== undefined ? scale : 1
+      if (next === target) return
+      target = next
+      animate(size, next, {
+        type: 'spring',
+        stiffness: 550,
+        damping: 30,
+        restSpeed: 10,
+        onUpdate: (v) => {
+          el.style.transform = v === 1 ? 'none' : `scale(${v}) translateZ(0)`
+        }
+      })
+    }
     const hover = (active: boolean) => (event: PointerEvent) => {
       if (!isPrimaryPointer(event)) return
-      const { onHoverStart, scale } = latest.current
-      if (scale !== undefined && hovered !== active) {
-        hovered = active
-        animate(size, active ? scale : 1, {
-          type: 'spring',
-          stiffness: 550,
-          damping: 30,
-          restSpeed: 10,
-          onUpdate: (v) => {
-            el.style.transform = v === 1 ? 'none' : `scale(${v}) translateZ(0)`
-          }
-        })
-      }
-      if (active) onHoverStart()
+      over = active
+      resize.current!()
+      if (active) latest.current.onHoverStart()
     }
     const enter = hover(true)
     const leave = hover(false)
@@ -504,4 +533,11 @@ export const useHover = (
       size.stop()
     }
   }, [])
+
+  // A scale given or taken away while the pointer is over the element (say
+  // reduced motion was turned on or off) applies at once, as framer's
+  // whileHover does, rather than on the next enter or leave
+  useIsomorphicLayoutEffect(() => {
+    if (resize.current) resize.current()
+  }, [scale])
 }

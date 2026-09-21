@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Turning reduced motion on or off now applies while the page is open. The
+  setting used to be read once, as the component mounted, so a reader who
+  turned it on kept getting flips and rolls until a reload. Turned on mid-flip,
+  both variants come to rest on the current text at once, with no letter left
+  part way round, and a flap's extra tiles for a shorter word go with it.
+  Turned off, the next hover or text change moves again. The reduced-motion
+  hover scale now follows the setting while the pointer is over the text,
+  scaling up or back down at once rather than on the next enter or leave.
+  Server rendering and the first render are unchanged.
+
 ## 1.2.0 (2026-09-21)
 
 ### Changes
