@@ -9066,13 +9066,16 @@ var FlapTile = function FlapTile(_ref6) {
   useIsomorphicLayoutEffect(function () {
     if (!faces.turn) return;
     paint(0);
+    var changing = function changing() {
+      return bringing.current !== shown.current;
+    };
     var land = function land() {
-      shown.current = bringing.current;
-      setFaces(function (f) {
-        return f.from === f.to ? f : _extends({}, f, {
+      if (changing()) setFaces(function (f) {
+        return _extends({}, f, {
           from: f.to
         });
       });
+      shown.current = bringing.current;
       if (wanted.current !== shown.current) return turn(0);
       running.current = animate$1(-180, -180 + 180 * BOUNCE_HEIGHT, {
         duration: seconds.current * (1 - FALL_SHARE),
@@ -9090,7 +9093,7 @@ var FlapTile = function FlapTile(_ref6) {
       onUpdate: function onUpdate(rotateX) {
         if (!falling.current && rotateX < 0) {
           falling.current = true;
-          if (bringing.current !== shown.current) setFaces(function (f) {
+          if (changing()) setFaces(function (f) {
             return _extends({}, f, {
               falling: true
             });

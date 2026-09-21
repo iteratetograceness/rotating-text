@@ -90,6 +90,8 @@ const hover = (container: HTMLElement) =>
   act(() => propsOf.get(root(container))!.onHoverStart())
 // Each flap's animate() call as [from, to, options]
 const flips = () => vi.mocked(animate).mock.calls as any[]
+const sizers = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('[class*="sizer"]'))
 // The letters on a tile: static top, static bottom, flap front, flap back
 const faces = (tile: Element) =>
   Array.from(tile.querySelectorAll('span'))
@@ -386,44 +388,43 @@ describe('RotatingText', () => {
     expect(faces(tile)).toEqual(['d', 'b', 'b', 'd'])
   })
 
-  it('renders a tile again as its flap falls only when the letter changes', () => {
+  it('does not render a tile again while a hover flips its letter over itself', () => {
     const onRender = vi.fn()
-    const { container, rerender } = render(
+    const { container } = render(
       <React.Profiler id='rt' onRender={onRender}>
         <RotatingText text='ab' variant='flap' />
       </React.Profiler>
     )
-    const sizers = () =>
-      Array.from(container.querySelectorAll('[class*="sizer"]'))
-
-    // A hover flips each letter over itself: nothing to make room for
     hover(container)
     const commits = onRender.mock.calls.length
-    act(() => flips().forEach(([, , fall]) => fall.onUpdate(-10)))
+
+    // Nothing to make room for as the flaps fall, nor to swap as they land
+    const falls = flips()
+    act(() => falls.forEach(([, , fall]) => fall.onUpdate(-10)))
+    act(() => falls.forEach(([, , fall]) => fall.onComplete()))
     expect(onRender).toHaveBeenCalledTimes(commits)
-    expect(sizers().map((el) => el.getAttribute('data-was'))).toEqual([
+    expect(sizers(container).map((el) => el.getAttribute('data-was'))).toEqual([
       null,
       null
     ])
-    act(() => flips().forEach(([, , fall]) => fall.onComplete()))
-    act(() =>
-      flips()
-        .slice(2)
-        .forEach(([, , bounce]) => bounce.onComplete())
-    )
+  })
 
-    // A new letter falls over the old one, so the tile sizes for both
-    rerender(
-      <React.Profiler id='rt' onRender={onRender}>
-        <RotatingText text='aW' variant='flap' />
-      </React.Profiler>
+  it('makes room for both letters when the text changes before a hover flap falls', () => {
+    const { container, rerender } = render(
+      <RotatingText text='ab' variant='flap' stagger={0.1} />
     )
-    const [, , fall] = flips()[4]
-    const before = onRender.mock.calls.length
+    hover(container)
+    rerender(<RotatingText text='aW' variant='flap' stagger={0.1} />)
+    const [, second] = Array.from(root(container).children)
+    const [, , fall] = flips()[1]
+
     act(() => fall.onUpdate(-10))
-    expect(onRender).toHaveBeenCalledTimes(before + 1)
-    expect(sizers()[1].getAttribute('data-was')).toBe('b')
-    expect(sizers()[1].textContent).toBe('W')
+    expect(sizers(container)[1].getAttribute('data-was')).toBe('b')
+    expect(sizers(container)[1].textContent).toBe('W')
+    expect(faces(second)).toEqual(['W', 'b', 'b', 'W'])
+
+    act(() => fall.onComplete())
+    expect(faces(second)).toEqual(['W', 'W', 'W', 'W'])
   })
 
   it('ignores a hover while a tile is already flipping', () => {
