@@ -92,6 +92,11 @@ describe('RotatingText', () => {
       const rule = css.match(new RegExp(`\\${selector} \\{([^}]*)\\}`))
       expect(rule?.[1]).toMatch(/white-space: pre;/)
     }
+    // and the placeholder is laid out like the letters, each in its own box,
+    // so pairs that would kern closer don't make it narrower than they are
+    const placeholderRule = css.match(/\.placeholder \{([^}]*)\}/)![1]
+    expect(placeholderRule).toMatch(/font-kerning: none;/)
+    expect(placeholderRule).toMatch(/font-variant-ligatures: none;/)
     const { container } = render(<RotatingText text='a  b c' />)
     const [front, back, placeholder] = Array.from(
       container.firstElementChild!.children

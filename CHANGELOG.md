@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- A roll word whose letters kern closer in its font, like `AVATAR`, `WAVE`
+  or `Type`, is now as wide as its letters are drawn. Each letter turns in
+  its own box, so it is never kerned, but the roll was sized from the kerned
+  word and drew past its edge over the text after it. Words with no kerning
+  or ligatures keep exactly the width they had.
+
 ## 1.1.0 (2026-09-21)
 
 ### Features

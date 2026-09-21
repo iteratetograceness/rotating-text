@@ -40,6 +40,10 @@
 ._3HCUh {
   visibility: hidden;
   white-space: pre;
+  /* Laid out like the letters, each in its own box, so a word whose letters
+     would kern closer (AVATAR) isn't sized narrower than they are drawn */
+  font-kerning: none;
+  font-variant-ligatures: none;
 }
 
 /* Split-flap tiles. Colours and sizes come from custom properties so a page
