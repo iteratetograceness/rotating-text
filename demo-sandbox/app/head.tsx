@@ -5,7 +5,7 @@ export default function Head() {
       <meta content='width=device-width, initial-scale=1' name='viewport' />
       <meta
         name='description'
-        content='A 3D flip-on-hover text component for React, built with Framer Motion.'
+        content='A 3D flip-on-hover text component for React, with no dependencies beyond React.'
       />
       <meta
         name='theme-color'

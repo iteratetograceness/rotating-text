@@ -1020,4 +1020,79 @@ describe('RotatingText', () => {
       ])
     })
   })
+
+  it('takes away a resting space when the text now ends before it', async () => {
+    const props = { variant: 'flap', timing: 0.1, stagger: 0.01 } as const
+    const { container, rerender } = render(
+      <RotatingText text='ab ' {...props} />
+    )
+    const board = container.firstElementChild!
+    expect(board.children).toHaveLength(3)
+    rerender(<RotatingText text='ab' {...props} />)
+    await waitFor(() => expect(board.children).toHaveLength(2))
+
+    // Several of them, and a space after a letter that flips to blank first
+    rerender(<RotatingText text='ab  ' {...props} />)
+    await waitFor(() => expect(board.children).toHaveLength(4))
+    rerender(<RotatingText text='ab' {...props} />)
+    await waitFor(() => expect(board.children).toHaveLength(2))
+    rerender(<RotatingText text='abc ' {...props} />)
+    await waitFor(() => expect(board.children).toHaveLength(4))
+    rerender(<RotatingText text='ab' {...props} />)
+    await waitFor(() => expect(board.children).toHaveLength(2))
+    expect(board.textContent).toBe('aaaaabbbbb')
+  })
+
+  it('drops a waiting flip over a space when the text ends before it in the same render', async () => {
+    const props = { variant: 'flap', timing: 0.1, stagger: 0.01 } as const
+    // A page that shortens its text when hovered. Its update lands in the
+    // same render as the hover's flip, so the space's tile is told it is past
+    // the end before its first flap has started.
+    const Page = () => {
+      const [hovers, setHovers] = React.useState(0)
+      const [text, setText] = React.useState('a ')
+      React.useEffect(() => {
+        const hovered = () => setHovers((n) => n + 1)
+        document.addEventListener('pointerenter', hovered, true)
+        return () => document.removeEventListener('pointerenter', hovered, true)
+      }, [])
+      React.useEffect(() => {
+        if (hovers) setText('a')
+      }, [hovers])
+      return <RotatingText text={text} {...props} />
+    }
+    const { container } = render(<Page />)
+    const board = container.firstElementChild!
+    expect(board.children).toHaveLength(2)
+    const flaps = Array.from(
+      board.children,
+      (tile) => tile.lastElementChild as HTMLElement
+    )
+    const moves = flaps.map((flap) => {
+      const seen: number[] = []
+      watch(flap, () =>
+        seen.push(
+          Number(/rotateX\((-?[\d.e-]+)deg\)/.exec(flap.style.transform)?.[1])
+        )
+      )
+      return seen
+    })
+    fireEvent.pointerEnter(board)
+    expect(board.children).toHaveLength(1)
+
+    // The 'a' flips over itself and comes back to rest
+    await waitFor(() => {
+      expect(Math.min(...moves[0])).toBeLessThan(-170)
+      expect(moves[0][moves[0].length - 1]).toBe(0)
+    })
+    const tile = board.firstElementChild!
+    expect(Array.from(tile.children, (half) => half.textContent)).toEqual([
+      'a',
+      'a',
+      'a',
+      'aa'
+    ])
+    // The space's flip was called off before its flap moved
+    expect(moves[1].filter((angle) => angle !== 0)).toEqual([])
+  })
 })

@@ -37,6 +37,12 @@
   its own box, so it is never kerned, but the roll was sized from the kerned
   word and drew past its edge over the text after it. Words with no kerning
   or ligatures keep exactly the width they had.
+- When flap text loses a trailing space, like `go ` becoming `go`, the space's
+  blank tile is now taken away. It used to stay at the end of the board until
+  the text changed again.
+- A flap no longer throws when a hover starts a space's first flip and the
+  same render ends the text before that space. The flip is called off before
+  its flap moves.
 
 ## 1.1.0 (2026-09-21)
 

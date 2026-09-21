@@ -780,12 +780,19 @@ const FlapBoard = ({
   // Tiles past the end of the text that have come to rest on blank
   const [gone] = React.useState(() => new Set<number>())
   const length = React.useRef(letters.length)
+  // Takes away the tiles at the end that have come to rest past it
+  const trim = (n: number) => {
+    while (n > length.current && gone.has(n - 1)) n--
+    return n
+  }
   useIsomorphicLayoutEffect(() => {
     length.current = letters.length
     gone.forEach((i) => {
       if (i < letters.length) gone.delete(i)
     })
-    setSlots(count)
+    // A tile already resting on blank (a space the text now ends before)
+    // reported in its own effect, before this one knew the new length
+    setSlots(trim(count))
   }, [count, letters.length])
 
   // Tiles added after the first render flip in from blank
@@ -796,10 +803,7 @@ const FlapBoard = ({
 
   const blank = React.useCallback((i: number) => {
     gone.add(i)
-    setSlots((n) => {
-      while (n > length.current && gone.has(n - 1)) n--
-      return n
-    })
+    setSlots(trim)
   }, [])
 
   return (
@@ -934,8 +938,8 @@ const FlapTile = ({
   useIsomorphicLayoutEffect(() => {
     wanted.current = char
     if (still) {
-      // No motion: the new letter just replaces the old one
-      if (running.current) running.current.stop()
+      // No motion: the new letter just replaces the old one, and settling
+      // stops the flap
       shown.current = char
       if (busy.current || faces.from !== char || faces.to !== char) settle(char)
     } else if (!busy.current) {
@@ -945,10 +949,7 @@ const FlapTile = ({
       if (char !== shown.current) {
         bringing.current = char
         setFaces((f) => ({ ...f, to: char }))
-      } else {
-        running.current!.stop()
-        settle(char)
-      }
+      } else settle(char) // which stops the flap, even one not started yet
     }
   }, [char, still, onBlank])
 
@@ -1001,6 +1002,9 @@ const FlapTile = ({
   // is where it starts, so the halves overlap the same way at every rest.
   useIsomorphicLayoutEffect(() => {
     if (!faces.settled) return
+    // Every settle stops the flap: a flip called off in the same render
+    // that asked for it was only started after the letter effect settled it
+    if (running.current) running.current.stop()
     paint(0)
     busy.current = false
     if (wanted.current !== shown.current) turn(0)
