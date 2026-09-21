@@ -459,15 +459,24 @@ var rollSpring = function rollSpring(seconds) {
     restSpeed: frequency * ROLL_REST
   };
 };
-var rollTransform = function rollTransform(rotateX) {
-  return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + "deg) translateZ(var(--rt-depth))";
-};
-var rollRest = function rollRest(offset) {
-  return offset ? 'scaleY(0)' : 'perspective(4em)';
+var rollTransform = function rollTransform(rotateX, depth) {
+  return "perspective(4em) translateZ(calc(-1 * " + depth + ")) rotateX(" + rotateX + "deg) translateZ(" + depth + ")";
 };
 var ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85];
 var ROLL_SHADE = [0, 0.75, 1, 0.75, 0];
+var rollShade = transform(ROLL_SHADE_ANGLES, ROLL_SHADE);
+var rollPose = function rollPose(turned, shade, depth) {
+  return turned === 0 ? 'perspective(4em)' : shade ? rollTransform(turned, depth) : 'scaleY(0)';
+};
+var DEPTH = 'var(--rt-depth)';
+var readDepth = function readDepth(row) {
+  var face = row && row.firstElementChild;
+  var depth = face && getComputedStyle(face).getPropertyValue('--rt-depth');
+  var literal = depth && depth.trim();
+  return literal && typeof CSS !== 'undefined' && CSS.supports('transform', rollTransform(0, literal)) ? literal : DEPTH;
+};
 var WIDTH_REST = 0.1;
+var WIDTH_PACE = 7.5 / Math.E / 60;
 var widthSpring = function widthSpring(seconds, distance, velocity) {
   var frequency = 7.5 / seconds;
   var stiffness = Math.pow(frequency, 2);
@@ -606,6 +615,7 @@ var RollFaces = function RollFaces(_ref2) {
   var landing = useRef(false);
   var syncing = useRef(false);
   var latest = useRef(letters);
+  var depth = useRef(DEPTH);
   var _React$useReducer = useReducer(function (n) {
       return n + 1;
     }, 0),
@@ -621,7 +631,7 @@ var RollFaces = function RollFaces(_ref2) {
   var word = letters.join('');
   var was = next.front.join('');
   var coming = next.back.join('');
-  var width = useEasedWidth([word, was, coming].join('\n'), was !== word || coming !== word, duration(0), still);
+  var width = useEasedWidth([word, was, coming].join('\n'), was !== word || coming !== word, duration(0), Math.max(0, (next.back.length - 1) * stagger), still);
   var finish = function finish() {
     if (landing.current || syncing.current || turning.size) return;
     if (!moved.size && faces.front.every(function (_char, i) {
@@ -701,7 +711,10 @@ var RollFaces = function RollFaces(_ref2) {
       if (turning.has(angle)) {
         if (!needed && !hovered.has(angle)) angle.stop();
       } else if (needed) {
-        if (first < 0) first = changed ? 0 : i;
+        if (first < 0) {
+          first = changed ? 0 : i;
+          depth.current = readDepth(width.front.current);
+        }
         turn(angle, i, (i - first) * stagger);
       }
     });
@@ -721,6 +734,7 @@ var RollFaces = function RollFaces(_ref2) {
     var slots = angles.slice();
     startRef.current = function () {
       if (turning.size || landing.current) return;
+      depth.current = readDepth(width.front.current);
       slots.forEach(function (angle, i) {
         hovered.add(angle);
         turn(angle, i, i * stagger);
@@ -747,7 +761,8 @@ var RollFaces = function RollFaces(_ref2) {
       key: i,
       "char": _char5,
       angle: angles[i],
-      offset: 0
+      offset: 0,
+      depth: depth
     });
   })), createElement("div", {
     className: styles.back,
@@ -758,7 +773,8 @@ var RollFaces = function RollFaces(_ref2) {
       key: i,
       "char": _char6,
       angle: angles[i],
-      offset: 90
+      offset: 90,
+      depth: depth
     });
   })), createElement("div", {
     className: styles.placeholder,
@@ -801,7 +817,7 @@ var offsets = function offsets(row) {
     return start;
   });
 };
-var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
+var useEasedWidth = function useEasedWidth(size, holding, seconds, span, still) {
   var placeholder = useRef(null);
   var front = useRef(null);
   var back = useRef(null);
@@ -849,7 +865,8 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
     var rows = [front.current, back.current].map(function (row) {
       return parseFloat(getComputedStyle(row).width);
     });
-    var to = holding ? word + Math.max(0, rows[0] - rows[1] || 0) : word;
+    var mixed = holding && back.current.textContent !== el.textContent;
+    var to = !holding ? word : mixed ? Math.max(word, rows[0] || 0, rows[1] || 0) : word + Math.max(0, rows[0] - rows[1] || 0);
     natural.current = to;
     var held = to - word >= WIDTH_REST;
     var easing = seconds > 0 && Math.abs(to - from) >= WIDTH_REST;
@@ -875,7 +892,9 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
     var velocity = eased.isAnimating() ? eased.getVelocity() : 0;
     if (!eased.isAnimating()) eased.jump(from);
     paint(eased.get());
-    animate(eased, to, _extends({}, widthSpring(seconds, to - eased.get(), velocity), {
+    var distance = Math.abs(to - eased.get());
+    var time = mixed ? Math.max(seconds, Math.min(span, distance * WIDTH_PACE)) : seconds;
+    animate(eased, to, _extends({}, widthSpring(time, to - eased.get(), velocity), {
       onUpdate: paint,
       onComplete: held ? undefined : release
     }));
@@ -905,27 +924,32 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, still) {
     text: text
   };
 };
-var rollShade = transform(ROLL_SHADE_ANGLES, ROLL_SHADE);
 var RollLetter = memo(function RollLetter(_ref4) {
   var _char8 = _ref4["char"],
     angle = _ref4.angle,
-    offset = _ref4.offset;
+    offset = _ref4.offset,
+    depth = _ref4.depth;
   var face = useRef(null);
   useIsomorphicLayoutEffect(function () {
+    var pose = face.current.style.transform;
+    var shade = face.current.style.opacity;
     var follow = function follow(a) {
       var el = face.current;
       if (!el) return;
-      el.style.transform = a ? rollTransform(a + offset) : rollRest(offset);
-      el.style.opacity = String(rollShade(a + offset));
+      var turned = a + offset;
+      var opacity = rollShade(turned);
+      var next = rollPose(turned, opacity, depth.current);
+      if (next !== pose) el.style.transform = pose = next;
+      if (String(opacity) !== shade) el.style.opacity = shade = String(opacity);
     };
-    if (angle.get() !== 0) follow(angle.get());
+    follow(angle.get());
     return angle.on('change', follow);
   }, [angle, offset]);
   return createElement("span", {
     className: styles.face,
     ref: face,
     style: {
-      transform: rollRest(offset),
+      transform: rollPose(offset, rollShade(offset), DEPTH),
       opacity: rollShade(offset)
     }
   }, _char8);
