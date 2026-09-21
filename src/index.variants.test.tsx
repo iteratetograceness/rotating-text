@@ -386,6 +386,36 @@ describe('RotatingText', () => {
     expect(faces(tile)).toEqual(['d', 'b', 'b', 'd'])
   })
 
+  it('dims the flap faces while they turn and clears them at rest', () => {
+    const { container, rerender } = render(
+      <RotatingText text='a' variant='flap' />
+    )
+    rerender(<RotatingText text='b' variant='flap' />)
+    const tile = root(container).children[0]
+    const [front, back] = Array.from(tile.querySelectorAll('span')).filter(
+      (el) => el.className.includes('leaf')
+    )
+    const brightness = (el: HTMLElement) =>
+      Number(el.style.filter.match(/brightness\((.*)\)/)?.[1] ?? 1)
+    expect([front.style.filter, back.style.filter]).toEqual(['', ''])
+
+    // Still facing the light: the front is lit, the back faces away
+    const [, , fall] = flips()[0]
+    act(() => fall.onUpdate(-10))
+    expect(front.style.filter).toBe('')
+    expect(brightness(back)).toBeLessThan(1)
+
+    // Turned away from the light, the front darkens and the back brightens
+    act(() => fall.onUpdate(-120))
+    expect(brightness(front)).toBeLessThan(1)
+    act(() => fall.onUpdate(-170))
+    expect(brightness(back)).toBeGreaterThan(brightness(front))
+
+    act(() => fall.onComplete())
+    act(() => flips()[1][2].onComplete())
+    expect([front.style.filter, back.style.filter]).toEqual(['', ''])
+  })
+
   it('ignores a hover while a tile is already flipping', () => {
     const { container, rerender } = render(
       <RotatingText text='a' variant='flap' />

@@ -8668,6 +8668,9 @@ var lit = function lit(facing) {
 var shade = function shade(facing) {
   return Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)));
 };
+var dim = function dim(face, amount) {
+  face.style.filter = amount ? "brightness(" + (1 - amount) + ")" : '';
+};
 var RotatingText = function RotatingText(_ref) {
   var text = _ref.text,
     _ref$timing = _ref.timing,
@@ -8998,12 +9001,13 @@ var FlapTile = function FlapTile(_ref6) {
   var paint = function paint(rotateX) {
     if (!flap.current || rotateX === painted.current) return;
     painted.current = rotateX;
-    tile.current.toggleAttribute('data-turning', rotateX !== 0);
+    var turning = rotateX !== 0;
+    tile.current.toggleAttribute('data-turning', turning);
     var angle = -rotateX * Math.PI / 180;
     var facing = Math.cos(angle - LIGHT);
     flap.current.style.transform = "rotateX(" + rotateX + "deg)";
-    front.current.style.filter = rotateX ? "brightness(" + (1 - shade(facing)) + ")" : '';
-    back.current.style.filter = rotateX ? "brightness(" + (1 - shade(-facing)) + ")" : '';
+    dim(front.current, turning ? shade(facing) : 0);
+    dim(back.current, turning ? shade(-facing) : 0);
     var reach = Math.sin(angle) * Math.tan(LIGHT) - Math.cos(angle);
     shadow.current.style.transform = "scaleY(" + clamp(0, 1, reach) + ")";
     shadow.current.style.opacity = String(SHADOW * clamp(0, 1, (180 + rotateX) / 12));
