@@ -118,6 +118,11 @@ const SHADOW = 0.5
 const lit = (facing: number) => AMBIENT + (1 - AMBIENT) * Math.max(0, facing)
 const shade = (facing: number) =>
   Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)))
+// A face with no shade carries no filter at all, so it renders as it does
+// at rest
+const dim = (face: HTMLElement, amount: number) => {
+  face.style.filter = amount ? `brightness(${1 - amount})` : ''
+}
 
 export const RotatingText = ({
   text,
@@ -543,8 +548,8 @@ const FlapTile = ({
 
   const tile = React.useRef<HTMLSpanElement>(null)
   const flap = React.useRef<HTMLSpanElement>(null)
-  const frontShade = React.useRef<HTMLSpanElement>(null)
-  const backShade = React.useRef<HTMLSpanElement>(null)
+  const front = React.useRef<HTMLSpanElement>(null)
+  const back = React.useRef<HTMLSpanElement>(null)
   const shadow = React.useRef<HTMLSpanElement>(null)
   const painted = React.useRef(NaN)
 
@@ -555,12 +560,15 @@ const FlapTile = ({
     painted.current = rotateX
     // The flap is 3D only while it is down, from its first frame off the
     // top to the one that puts it back up
-    tile.current!.toggleAttribute('data-turning', rotateX !== 0)
+    const turning = rotateX !== 0
+    tile.current!.toggleAttribute('data-turning', turning)
     const angle = (-rotateX * Math.PI) / 180
     const facing = Math.cos(angle - LIGHT)
     flap.current.style.transform = `rotateX(${rotateX}deg)`
-    frontShade.current!.style.opacity = String(shade(facing))
-    backShade.current!.style.opacity = String(shade(-facing))
+    // Each leaf is dimmed as a whole, which its layer can do without a
+    // repaint. At rest the front is fully lit and the back is hidden.
+    dim(front.current!, turning ? shade(facing) : 0)
+    dim(back.current!, turning ? shade(-facing) : 0)
     // How far down the bottom half the flap's shadow reaches, fading as the
     // flap closes over it
     const reach = Math.sin(angle) * Math.tan(LIGHT) - Math.cos(angle)
@@ -693,18 +701,20 @@ const FlapTile = ({
       </span>
       <span className={`${styles.half} ${styles.bottom}`} aria-hidden='true'>
         {faces.from}
-        <span ref={shadow} className={`${styles.shade} ${styles.shadow}`} />
+        <span ref={shadow} className={styles.shadow} />
       </span>
       <span aria-hidden='true' className={styles.flap} ref={flap}>
-        <span className={`${styles.half} ${styles.top} ${styles.leaf}`}>
+        <span
+          ref={front}
+          className={`${styles.half} ${styles.top} ${styles.leaf}`}
+        >
           {faces.from}
-          <span ref={frontShade} className={styles.shade} />
         </span>
         <span
+          ref={back}
           className={`${styles.half} ${styles.bottom} ${styles.leaf} ${styles.underside}`}
         >
           {faces.to}
-          <span ref={backShade} className={styles.shade} />
         </span>
       </span>
     </span>

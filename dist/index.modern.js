@@ -8588,7 +8588,7 @@ function useReducedMotion() {
     return shouldReduceMotion;
 }
 
-var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK","shadow":"_3IP-G"};
+var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shadow":"_3IP-G"};
 
 var ROLL_DAMPING = 0.65;
 var ROLL_REST = 0.5;
@@ -8664,6 +8664,9 @@ var lit = function lit(facing) {
 };
 var shade = function shade(facing) {
   return Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)));
+};
+var dim = function dim(face, amount) {
+  face.style.filter = amount ? "brightness(" + (1 - amount) + ")" : '';
 };
 var RotatingText = function RotatingText(_ref) {
   var text = _ref.text,
@@ -8988,19 +8991,20 @@ var FlapTile = function FlapTile(_ref6) {
   });
   var tile = useRef(null);
   var flap = useRef(null);
-  var frontShade = useRef(null);
-  var backShade = useRef(null);
+  var front = useRef(null);
+  var back = useRef(null);
   var shadow = useRef(null);
   var painted = useRef(NaN);
   var paint = function paint(rotateX) {
     if (!flap.current || rotateX === painted.current) return;
     painted.current = rotateX;
-    tile.current.toggleAttribute('data-turning', rotateX !== 0);
+    var turning = rotateX !== 0;
+    tile.current.toggleAttribute('data-turning', turning);
     var angle = -rotateX * Math.PI / 180;
     var facing = Math.cos(angle - LIGHT);
     flap.current.style.transform = "rotateX(" + rotateX + "deg)";
-    frontShade.current.style.opacity = String(shade(facing));
-    backShade.current.style.opacity = String(shade(-facing));
+    dim(front.current, turning ? shade(facing) : 0);
+    dim(back.current, turning ? shade(-facing) : 0);
     var reach = Math.sin(angle) * Math.tan(LIGHT) - Math.cos(angle);
     shadow.current.style.transform = "scaleY(" + clamp(0, 1, reach) + ")";
     shadow.current.style.opacity = String(SHADOW * clamp(0, 1, (180 + rotateX) / 12));
@@ -9123,22 +9127,18 @@ var FlapTile = function FlapTile(_ref6) {
     "aria-hidden": 'true'
   }, faces.from, createElement("span", {
     ref: shadow,
-    className: styles.shade + " " + styles.shadow
+    className: styles.shadow
   })), createElement("span", {
     "aria-hidden": 'true',
     className: styles.flap,
     ref: flap
   }, createElement("span", {
+    ref: front,
     className: styles.half + " " + styles.top + " " + styles.leaf
-  }, faces.from, createElement("span", {
-    ref: frontShade,
-    className: styles.shade
-  })), createElement("span", {
+  }, faces.from), createElement("span", {
+    ref: back,
     className: styles.half + " " + styles.bottom + " " + styles.leaf + " " + styles.underside
-  }, faces.to, createElement("span", {
-    ref: backShade,
-    className: styles.shade
-  }))));
+  }, faces.to)));
 };
 
 export { RotatingText };
