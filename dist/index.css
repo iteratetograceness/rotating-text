@@ -90,12 +90,11 @@
 }
 
 /* Each letter turns about an axis half a line behind it, like the face of a
-   cube, and disappears once it faces away. */
+   cube, and has faded out before it can face away, so it needs no hidden
+   backface (which would put resting letters on layers of their own). */
 ._3fNHM {
   --rt-depth: 0.55em;
   display: inline-block;
-  -webkit-backface-visibility: hidden;
-          backface-visibility: hidden;
   /* A space alone in its box would otherwise collapse to nothing */
   white-space: pre;
 }
