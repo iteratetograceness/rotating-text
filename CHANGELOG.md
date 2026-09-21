@@ -29,6 +29,10 @@
   letter that had turned until the last one landed. The turning letters'
   depth is also written into their transforms as the stylesheet gives it
   rather than through `var()`, which Chromium restyles about twice as fast.
+  A 32-letter text change spends 43% less time on style, 36% less
+  layerizing and 25% less committing, and 18% less main-thread time in a
+  typical frame; rapid changes across 32 letters spend 38% less on style
+  and 31% less committing.
 
 ### Fixes
 
