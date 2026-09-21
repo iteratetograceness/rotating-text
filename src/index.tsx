@@ -3,11 +3,11 @@ import {
   animate as animateValue,
   clamp,
   transform as interpolate,
-  motion,
   motionValue,
+  useHover,
   useIsomorphicLayoutEffect,
   useReducedMotion
-} from 'framer-motion'
+} from './motion'
 import styles from './index.module.css'
 
 interface Props {
@@ -61,7 +61,7 @@ const ROLL_SHADE = [0, 0.75, 1, 0.75, 0]
 // timing it has (1 + 7.5) * e^-7.5 of the way left to go, just under 0.5%,
 // and it lets go within a tenth of a pixel of the new width, so the last
 // step can't be seen. A critically damped spring is settled by distance
-// alone; framer ignores a rest speed for it.
+// alone; the spring ignores a rest speed for it.
 const WIDTH_REST = 0.1 // pixels
 const widthSpring = (seconds: number, distance: number, velocity: number) => {
   const frequency = 7.5 / seconds
@@ -73,7 +73,7 @@ const widthSpring = (seconds: number, distance: number, velocity: number) => {
   return {
     type: 'spring' as const,
     stiffness,
-    // Written this way so framer takes the critically damped branch exactly
+    // Written this way so the spring takes the critically damped branch exactly
     damping: 2 * Math.sqrt(stiffness),
     mass: 1,
     velocity: toward > fastest ? fastest * Math.sign(distance) : velocity,
@@ -154,6 +154,10 @@ export const RotatingText = ({
     else if (startRoll.current) startRoll.current()
   }
 
+  // With reduced motion, a hover scales the text up a little instead
+  const root = React.useRef<HTMLDivElement>(null)
+  useHover(root, flip, still ? 1.05 : undefined)
+
   const rootClass = [
     styles.container,
     variant === 'flap' ? styles.board : '',
@@ -163,12 +167,7 @@ export const RotatingText = ({
     .join(' ')
 
   return (
-    <motion.div
-      className={rootClass}
-      whileHover={still ? { scale: 1.05 } : undefined}
-      onHoverStart={flip}
-      style={style}
-    >
+    <div className={rootClass} ref={root} style={style}>
       {variant === 'flap' ? (
         <FlapBoard
           letters={letters}
@@ -186,7 +185,7 @@ export const RotatingText = ({
           startRef={startRoll}
         />
       )}
-    </motion.div>
+    </div>
   )
 }
 
@@ -245,7 +244,7 @@ const RollFaces = ({
   // The text as of the last commit
   const latest = React.useRef(letters)
   const [, rerender] = React.useReducer((n: number) => n + 1, 0)
-  // Renders again once framer has let go of the turn that just ended, so a
+  // Renders again once the angle has let go of the turn that just ended, so a
   // turn that render starts on the same angle is its own
   const update = () => Promise.resolve().then(rerender)
 
@@ -279,7 +278,7 @@ const RollFaces = ({
     const i = angles.indexOf(angle)
     if (i >= 0 && faces.front[i] === faces.back[i] && !moved.has(angle)) {
       // It turned over itself, as on a hover. Put its front face back, which
-      // looks the same, so selecting text and the next flip start from there.
+      // looks the same, so the next flip starts from there.
       if (angle.get() !== 0) angle.jump(0)
     }
     // If the text changed while letters turned, the ones now free of it turn
@@ -297,7 +296,7 @@ const RollFaces = ({
 
   const turn = (angle: Angle, i: number, delay: number) => {
     turning.add(angle)
-    // Framer can report a turn stopped after it has completed
+    // A turn can be reported stopped after it has completed
     let over = false
     animateValue(angle, -90, {
       ...rollSpring(duration(i)),
@@ -381,6 +380,19 @@ const RollFaces = ({
   }
 
   useIsomorphicLayoutEffect(() => {
+    // A render in a transition can be committed well after it ran, while the
+    // letters went on turning, and a copy that has turned into view since
+    // would take its new letter in plain sight. If the letters have moved on,
+    // the roll renders again at once from where they are now, and that render
+    // replaces this one before it is painted.
+    if (
+      !still &&
+      !sameFaces(next, plan(faces, letters, angles, landing.current))
+    ) {
+      rerender()
+      return
+    }
+
     syncing.current = true
     try {
       sync()
@@ -411,16 +423,15 @@ const RollFaces = ({
 
   return (
     <React.Fragment>
-      <div className={styles.front} ref={width.front}>
+      <div className={styles.text} ref={width.text}>
+        {word}
+      </div>
+      <div className={styles.front} aria-hidden='true' ref={width.front}>
         {next.front.map((char, i) => (
           <RollLetter key={i} char={char} angle={angles[i]} offset={0} />
         ))}
       </div>
-      <div
-        className={`${styles.back} ${styles.copy}`}
-        aria-hidden='true'
-        ref={width.back}
-      >
+      <div className={styles.back} aria-hidden='true' ref={width.back}>
         {next.back.map((char, i) => (
           <RollLetter key={i} char={char} angle={angles[i]} offset={90} />
         ))}
@@ -478,6 +489,10 @@ const plan = (
   return { front, back }
 }
 
+const sameFaces = (a: Faces, b: Faces) =>
+  a.front.length === b.front.length &&
+  a.front.every((char, i) => char === b.front[i] && a.back[i] === b.back[i])
+
 // How far along its row each letter starts, from the row's start edge. The
 // rows of front faces and copies start at the same place.
 const offsets = (row: HTMLElement) => {
@@ -504,6 +519,7 @@ const useEasedWidth = (
   const placeholder = React.useRef<HTMLDivElement>(null)
   const front = React.useRef<HTMLDivElement>(null)
   const back = React.useRef<HTMLDivElement>(null)
+  const text = React.useRef<HTMLDivElement>(null)
   const [eased] = React.useState(() => motionValue(0))
   // The placeholder's width, kept current as fonts load or the page
   // restyles, so a change eases from the width that was really on screen
@@ -535,6 +551,7 @@ const useEasedWidth = (
     for (const el of [placeholder.current, front.current, back.current]) {
       if (el) el.style.width = el.style.clipPath = ''
     }
+    if (text.current) text.current.style.pointerEvents = ''
   }
 
   useIsomorphicLayoutEffect(() => {
@@ -576,6 +593,11 @@ const useEasedWidth = (
       paint(to)
       return
     }
+    // The text under the letters is already the new word's width, so while
+    // the roll widens it reaches over the text beside it. It lets pointers
+    // through to that text meanwhile. Cutting it off with the letters
+    // instead would re-raster it every frame.
+    if (to > from) text.current!.style.pointerEvents = 'none'
     const velocity = eased.isAnimating() ? eased.getVelocity() : 0
     if (!eased.isAnimating()) eased.jump(from)
     paint(eased.get())
@@ -609,7 +631,7 @@ const useEasedWidth = (
     }
   }, [])
 
-  return { placeholder, front, back }
+  return { placeholder, front, back, text }
 }
 
 interface RollLetterProps {
@@ -928,7 +950,9 @@ const FlapTile = ({
       </span>
       <span className={`${styles.half} ${styles.bottom}`} aria-hidden='true'>
         {faces.from}
-        <span ref={shadow} className={styles.shadow} />
+        <span className={styles.shade}>
+          <span ref={shadow} className={styles.shadow} />
+        </span>
       </span>
       <span aria-hidden='true' className={styles.flap} ref={flap}>
         <span

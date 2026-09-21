@@ -22,8 +22,11 @@ landing page links `../dist`.
 3. Drive it with `playwright-core` and `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'`.
    In `addInitScript`, replace `performance.now`, `requestAnimationFrame` and
    `cancelAnimationFrame` with a manual clock, then step `1000/60` ms per frame
-   (`1000/60/4` for 4x slow motion). framer-motion follows the fake clock, so
-   frames are deterministic.
+   (`1000/60/4` for 4x slow motion). The animations in `src/motion.ts` (and
+   framer-motion, on commits from before it) follow the fake clock, so frames
+   are deterministic. To compare two builds, log each frame's DOM (the
+   component's `outerHTML`, inline styles included) and diff them: screenshots
+   of the reduced-motion scale differ between runs of one build.
 4. Per frame, log each letter span's `rotateX(...)` and `opacity` from
    `style.transform`. This trace is the most useful evidence: front faces are
    the first N spans, copies the next N (always front + 90).

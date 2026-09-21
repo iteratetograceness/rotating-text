@@ -2,8 +2,31 @@
 
 ## Unreleased
 
+### Changes
+
+- framer-motion is no longer bundled into the package. The few parts of it the
+  component used (its frame loop, spring and tween, and hover) are ported into
+  `src/motion.ts` with the same arithmetic, so every frame renders as before.
+  `dist/index.modern.js` drops from 346 KB (84 KB gzipped) to 37 KB (10 KB
+  gzipped), and mounting takes 16 to 35% less main-thread time. React is
+  still the only dependency.
+- The roll's text is read by screen readers and selected and copied as the
+  new text from the moment `text` changes, rather than the old text until
+  every letter has landed. It is read and copied as one word, where it used
+  to come a letter at a time, and a drag or double-click over the letters
+  now selects them like ordinary text. The text sits unseen under the
+  letters, which are only drawn, so the motion is unchanged. A selection's
+  highlight is drawn behind the letters, which keep their own colour; set
+  `--rt-selection` to give it a colour of your own.
+
 ### Fixes
 
+- A roll text change rendered inside `startTransition` no longer changes a
+  letter that has already started turning into view. React can commit such a
+  render well after it ran; if letters have moved on in the meantime, the roll
+  renders again from where they are before the frame is painted.
+- A flap tile whose side falls between two device pixels no longer darkens
+  that outer pixel column while the falling flap's shadow passes over it.
 - A roll word whose letters kern closer in its font, like `AVATAR`, `WAVE`
   or `Type`, is now as wide as its letters are drawn. Each letter turns in
   its own box, so it is never kerned, but the roll was sized from the kerned

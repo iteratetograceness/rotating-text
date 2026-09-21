@@ -5,6 +5,7 @@ import { renderToString } from 'react-dom/server'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RotatingText } from '.'
+import styles from './index.module.css'
 
 // Observers still watching when a test ends are stopped, pass or fail
 const observers: MutationObserver[] = []
@@ -46,14 +47,56 @@ const px = (value: string) => parseFloat(value)
 const angle = (el: HTMLElement) =>
   Number(/rotateX\(([-\d.e]+)deg\)/.exec(el.style.transform)![1])
 
-// Smoke tests against the real framer-motion. The prop-level behavior is
-// covered in index.variants.test.tsx, which stubs out motion components.
+// jsdom applies no stylesheet, so tests that depend on it read the rules
+const css = readFileSync(join(__dirname, 'index.module.css'), 'utf8').replace(
+  /\/\*[\s\S]*?\*\//g,
+  ''
+)
+
+// Everything the stylesheet gives an element through rules that name one of
+// its classes alone
+const declared = (el: Element) => {
+  let found = ''
+  for (const [, selectors, body] of Array.from(
+    css.matchAll(/([^{}]+)\{([^}]*)\}/g)
+  )) {
+    for (const selector of selectors.split(',')) {
+      const name = /^\s*\.([\w-]+)\s*$/.exec(selector)
+      if (name && el.classList.contains((styles as any)[name[1]])) {
+        found += body
+      }
+    }
+  }
+  return found
+}
+
+// The text inside `root`, leaving out any element `skip` rules out
+const textOf = (root: Element, skip: (el: Element) => boolean): string =>
+  Array.from(root.childNodes, (node) =>
+    node instanceof Element
+      ? skip(node)
+        ? ''
+        : textOf(node, skip)
+      : node.textContent
+  ).join('')
+
+const unseen = (el: Element) =>
+  /(^|[^-])(visibility: hidden|display: none);/.test(declared(el))
+
+// What a screen reader reads out, and what selecting all of it copies
+const readOut = (root: Element) =>
+  textOf(root, (el) => el.getAttribute('aria-hidden') === 'true' || unseen(el))
+const selectable = (root: Element) =>
+  textOf(root, (el) => /user-select: none;/.test(declared(el)) || unseen(el))
+
+// Smoke tests against the real animations in ./motion. The prop-level
+// behavior is covered in index.variants.test.tsx, which stubs them out.
 describe('RotatingText', () => {
   it('renders each letter of the text on the front and back faces', () => {
     const { container } = render(<RotatingText text='hello' />)
     const faces = container.firstElementChild!.children
 
-    for (const face of [faces[0], faces[1]]) {
+    for (const face of [faces[1], faces[2]]) {
       const letters = Array.from(
         face.querySelectorAll('span'),
         (span) => span.textContent
@@ -65,7 +108,7 @@ describe('RotatingText', () => {
   it('draws the letters at rest in server-rendered markup', () => {
     const host = document.createElement('div')
     host.innerHTML = renderToString(<RotatingText text='hi' />)
-    const [front, back] = Array.from(host.firstElementChild!.children)
+    const [, front, back] = Array.from(host.firstElementChild!.children)
     for (const letter of Array.from(front.querySelectorAll('span'))) {
       expect(angle(letter)).toBe(0)
       expect(letter.style.opacity).toBe('1')
@@ -83,11 +126,49 @@ describe('RotatingText', () => {
     )
   })
 
+  it('reads out and selects the new text from the moment it changes', async () => {
+    const { container, rerender } = render(
+      <RotatingText text='Hello' timing={0.1} stagger={0.02} />
+    )
+    const root = container.firstElementChild!
+    const [text, front] = Array.from(root.children)
+    expect(readOut(root)).toBe('Hello')
+    expect(selectable(root)).toBe('Hello')
+
+    rerender(<RotatingText text='World' timing={0.1} stagger={0.02} />)
+    // The letters have yet to turn and still show the old text
+    expect(front.textContent).toBe('Hello')
+    expect(readOut(root)).toBe('World')
+    expect(selectable(root)).toBe('World')
+
+    // And so on while they turn, and when the text changes again mid-turn
+    const letter = front.querySelector('span')!
+    await waitFor(() => expect(angle(letter)).toBeLessThan(-30))
+    expect(readOut(root)).toBe('World')
+    rerender(<RotatingText text='Wave' timing={0.1} stagger={0.02} />)
+    expect(readOut(root)).toBe('Wave')
+    expect(selectable(root)).toBe('Wave')
+
+    await waitFor(() => expect(front.textContent).toBe('Wave'))
+    expect(readOut(root)).toBe('Wave')
+    expect(selectable(root)).toBe('Wave')
+
+    // It lies out of flow under the letters, which let a drag through to it,
+    // and is never drawn, selected or not
+    expect(text.textContent).toBe('Wave')
+    expect(declared(text)).toMatch(/position: absolute;/)
+    expect(declared(text)).toMatch(/(^|[^-])color: transparent !important;/)
+    const selected = css.match(/\.text::selection \{([^}]*)\}/)
+    expect(selected?.[1]).toMatch(/(^|[^-])color: transparent !important;/)
+    for (const row of Array.from(root.children).slice(1, 3)) {
+      expect(declared(row)).toMatch(/pointer-events: none;/)
+    }
+  })
+
   // jsdom applies no stylesheet, so this reads the rules themselves: a space
   // alone in a letter's box, or doubled in the placeholder, collapses to
   // nothing unless white space is kept
   it('keeps the spaces between words in the roll', () => {
-    const css = readFileSync(join(__dirname, 'index.module.css'), 'utf8')
     for (const selector of ['.face', '.placeholder']) {
       const rule = css.match(new RegExp(`\\${selector} \\{([^}]*)\\}`))
       expect(rule?.[1]).toMatch(/white-space: pre;/)
@@ -98,7 +179,7 @@ describe('RotatingText', () => {
     expect(placeholderRule).toMatch(/font-kerning: none;/)
     expect(placeholderRule).toMatch(/font-variant-ligatures: none;/)
     const { container } = render(<RotatingText text='a  b c' />)
-    const [front, back, placeholder] = Array.from(
+    const [, front, back, placeholder] = Array.from(
       container.firstElementChild!.children
     )
     expect(front.children).toHaveLength(6)
@@ -110,7 +191,7 @@ describe('RotatingText', () => {
     const { container } = render(
       <RotatingText text='hi' timing={0.3} stagger={0.02} />
     )
-    const [front, back] = Array.from(container.firstElementChild!.children)
+    const [, front, back] = Array.from(container.firstElementChild!.children)
     const frontLetter = front.querySelector('span')!
     const backLetter = back.querySelector('span')!
 
@@ -199,7 +280,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='abcd' timing={0.3} stagger={0.1} />
     )
-    const [front] = Array.from(container.firstElementChild!.children)
+    const [, front] = Array.from(container.firstElementChild!.children)
     fireEvent.pointerEnter(container.firstElementChild!)
     await new Promise((resolve) => setTimeout(resolve, 60))
     rerender(<RotatingText text='xy' timing={0.3} stagger={0.1} />)
@@ -222,7 +303,7 @@ describe('RotatingText', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     rerender(<RotatingText text='yo' timing={0.4} stagger={0.01} />)
 
-    const [front, back] = Array.from(container.firstElementChild!.children)
+    const [, front, back] = Array.from(container.firstElementChild!.children)
     await waitFor(() => {
       expect(front.textContent).toBe('yo')
       for (const letter of Array.from(front.querySelectorAll('span'))) {
@@ -245,7 +326,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='hi' timing={0.2} />
     )
-    const [front, back, placeholder] = Array.from(
+    const [, front, back, placeholder] = Array.from(
       container.firstElementChild!.children
     ) as HTMLElement[]
     expect(placeholder.style.width).toBe('')
@@ -284,7 +365,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='hello' timing={0.1} stagger={0.02} />
     )
-    const [front, back, placeholder] = Array.from(
+    const [, front, back, placeholder] = Array.from(
       container.firstElementChild!.children
     ) as HTMLElement[]
     const seen: [number, string][] = []
@@ -316,7 +397,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='ab' timing={0.2} stagger={0.05} />
     )
-    const [front, back] = Array.from(container.firstElementChild!.children)
+    const [, front, back] = Array.from(container.firstElementChild!.children)
     const [frontA, frontB] = Array.from(front.querySelectorAll('span'))
     const [backA] = Array.from(back.querySelectorAll('span'))
     // Each time the first letter moves: its angle and both faces' letters
@@ -351,7 +432,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='aHib' {...props} />
     )
-    const [front] = Array.from(container.firstElementChild!.children)
+    const [, front] = Array.from(container.firstElementChild!.children)
     const letters = Array.from(front.querySelectorAll('span'))
     const lowest = letters.map(() => 0)
     letters.forEach((letter, i) =>
@@ -372,7 +453,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='abc' {...props} />
     )
-    const [front, back] = Array.from(container.firstElementChild!.children)
+    const [, front, back] = Array.from(container.firstElementChild!.children)
     const third = front.querySelectorAll('span')[2]
     rerender(<RotatingText text='abx' {...props} />)
     await waitFor(() => expect(angle(third)).toBeLessThan(-30))
@@ -393,7 +474,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='abc' {...props} />
     )
-    const [front] = Array.from(container.firstElementChild!.children)
+    const [, front] = Array.from(container.firstElementChild!.children)
     const third = front.querySelectorAll('span')[2]
     // The text each time the third letter comes back to its front face
     const back: string[] = []
@@ -420,7 +501,7 @@ describe('RotatingText', () => {
       const { container, rerender, unmount } = render(
         <RotatingText text='ab' {...props} />
       )
-      const [front, back] = Array.from(container.firstElementChild!.children)
+      const [, front, back] = Array.from(container.firstElementChild!.children)
       rerender(<RotatingText text={between} {...props} />)
       rerender(<RotatingText text='xb' {...props} />)
       await new Promise((resolve) => setTimeout(resolve, 20))
@@ -454,7 +535,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='ab' {...props} />
     )
-    const [front] = Array.from(container.firstElementChild!.children)
+    const [, front] = Array.from(container.firstElementChild!.children)
     rerender(<RotatingText text='abcd' {...props} />)
     await waitFor(() => expect(front.textContent).toBe('abcd'))
 
@@ -474,7 +555,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='ab' {...props} />
     )
-    const [front, back] = Array.from(container.firstElementChild!.children)
+    const [, front, back] = Array.from(container.firstElementChild!.children)
     const frontA = front.querySelector('span')!
     rerender(<RotatingText text='cd' {...props} />)
     await waitFor(() => expect(angle(frontA)).toBeLessThan(-30))
@@ -489,6 +570,129 @@ describe('RotatingText', () => {
         expect(angle(letter)).toBe(0)
       }
     })
+  })
+
+  // A text change in a transition is rendered a slice at a time, and the
+  // letters go on turning between the slices. Here the render is held open,
+  // behind components that take their time, until `ready` says so, and then
+  // it is committed at once. Changes are made outside act, so React yields
+  // between the slices as it does in a browser.
+  const heldTransition = (text: string, props: object) => {
+    let change!: (text: string) => void
+    let ready = () => true
+    const Slow = () => {
+      if (!ready()) {
+        const until = performance.now() + 6
+        while (performance.now() < until);
+      }
+      return null
+    }
+    const App = () => {
+      const [shown, setShown] = React.useState(text)
+      change = setShown
+      return (
+        <React.Fragment>
+          <RotatingText text={shown} {...props} />
+          {shown !== text &&
+            Array.from({ length: 400 }, (_, i) => <Slow key={i} />)}
+        </React.Fragment>
+      )
+    }
+    const view = render(<App />)
+    const [, front, back] = Array.from(
+      view.container.firstElementChild!.children
+    )
+    const changeLater = (to: string, until: () => boolean) => {
+      ready = until
+      React.startTransition(() => change(to))
+    }
+    return { ...view, front, back, change, changeLater }
+  }
+
+  // Records a copy's angle and letter as they are at the end of each task,
+  // which is what the browser paints
+  const watchCopy = (row: Element, i: number) => {
+    const copy = () => row.children[i] as HTMLElement
+    const state = (): [number, string] => [angle(copy()), copy().textContent!]
+    const seen = [state()]
+    // Letters the copy held only part way through a task, never painted
+    const unpainted: string[] = []
+    const observer = new MutationObserver((records) => {
+      const held = records
+        .filter((r) => r.type === 'characterData' && copy().contains(r.target))
+        .map((r) => r.oldValue!)
+      unpainted.push(...held.slice(1))
+      seen.push(state())
+    })
+    observer.observe(row, {
+      attributes: true,
+      characterData: true,
+      characterDataOldValue: true,
+      childList: true,
+      subtree: true
+    })
+    observers.push(observer)
+    // Frames where the copy showed another letter than in the frame before,
+    // while it could be seen in both
+    const swaps = () =>
+      seen.filter(
+        ([deg, char], k) =>
+          k > 0 &&
+          char !== seen[k - 1][1] &&
+          deg !== 90 &&
+          seen[k - 1][0] !== 90
+      )
+    return { copy, swaps, unpainted }
+  }
+
+  it('never swaps the letter on a copy that begins turning while a transition waits to commit', async () => {
+    const props = { timing: 0.5, stagger: 0.3 }
+    const { front, back, change, changeLater } = heldTransition('ab', props)
+    change('cd')
+    await waitFor(() => expect(back.textContent).toBe('cd'))
+    const { copy, swaps, unpainted } = watchCopy(back, 1)
+
+    // Rendered while the second letter waits its turn, and committed once
+    // its copy, still showing 'd', has turned into view
+    let late = false
+    changeLater('ce', () => late || (late = angle(copy()) < 60))
+    await waitFor(() => expect(late).toBe(true), { timeout: 2000 })
+
+    await waitFor(
+      () => {
+        expect(front.textContent).toBe('ce')
+        for (const letter of Array.from(front.children))
+          expect(angle(letter as HTMLElement)).toBe(0)
+      },
+      { timeout: 3000 }
+    )
+    expect(swaps()).toEqual([])
+    // The late commit did bring the 'e', and it was taken back unseen
+    expect(unpainted).toContain('e')
+  })
+
+  it('never swaps the letter on a copy that a hover turns while a transition waits to commit', async () => {
+    const props = { timing: 0.4, stagger: 0.1 }
+    const { container, front, back, changeLater } = heldTransition('ab', props)
+    const { copy, swaps, unpainted } = watchCopy(back, 0)
+
+    // Rendered at rest, and committed once a hover has turned the first
+    // copy, still showing 'a', into view
+    let late = false
+    changeLater('cd', () => late || (late = angle(copy()) < 60))
+    setTimeout(() => fireEvent.pointerEnter(container.firstElementChild!))
+    await waitFor(() => expect(late).toBe(true), { timeout: 2000 })
+
+    await waitFor(
+      () => {
+        expect(front.textContent).toBe('cd')
+        for (const letter of Array.from(front.children))
+          expect(angle(letter as HTMLElement)).toBe(0)
+      },
+      { timeout: 3000 }
+    )
+    expect(swaps()).toEqual([])
+    expect(unpainted).toContain('c')
   })
 
   it('carries on from the width it has reached when the text changes again', async () => {
@@ -601,6 +805,33 @@ describe('RotatingText', () => {
     })
     for (const [deg, turning] of seen) expect(turning).toBe(deg !== 0)
     expect(tiles.some((tile) => tile.hasAttribute('data-turning'))).toBe(false)
+  })
+
+  // A plain rectangle clips the shadow's own layer to whole pixels, so on a
+  // tile whose side falls between pixels the shadow darkens the page beside
+  // it. The shadow sits in a clip along the bottom half's own lines, drawn
+  // as an anti-aliased mask, and overhangs it so the clip's edge is the one
+  // that shows.
+  it("clips the flap's shadow along the bottom half's edges", () => {
+    const css = readFileSync(join(__dirname, 'index.module.css'), 'utf8')
+    const rule = (selector: string) =>
+      css
+        .match(new RegExp(`\\n\\${selector} \\{([^}]*)\\}`))?.[1]
+        .replace(/\s+/g, ' ')
+    const inset = (clip: string) => clip.match(/inset\( ?(.*?) 0 0 0/)?.[1]
+    const bottom = rule('.bottom')!.match(/clip-path: ([^;]*);/)![1]
+    const shade = rule('.shade')!.match(/clip-path: ([^;]*);/)![1]
+    expect(inset(shade)).toBe(inset(bottom))
+    expect(shade).toMatch(/ round /)
+    expect(rule('.shadow')).toMatch(/inset: 0 -1px;/)
+
+    const { container } = render(<RotatingText text='hi' variant='flap' />)
+    const tiles = Array.from(container.firstElementChild!.children)
+    for (const tile of tiles) {
+      const shadow = tile.querySelector('[class*=shadow]')!
+      expect(shadow.parentElement!.className).toMatch(/shade/)
+      expect(shadow.parentElement!.parentElement!.className).toMatch(/bottom/)
+    }
   })
 
   it('lands every flap on the newest text when it changes mid-flip', async () => {

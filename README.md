@@ -1,7 +1,7 @@
 # Rotating Text
 
 > Customizable 3D text hover animation.
-> Created using Framer Motion.
+> Moves on Framer Motion's springs, built in, so React is its only dependency.
 > Respects user's Reduced Motion preferences.
 
 **[See it live at rotating-text.vercel.app](https://rotating-text.vercel.app/)**, with a playground to try every prop on desktop, tablet or phone.
@@ -51,6 +51,8 @@ function MyApp() {
 | `style`     | `React.CSSProperties` | `undefined` | Inline styles applied to the outer container.                             |
 
 When `text` changes on the roll, each letter that changed turns over to the new one, in the same stagger and spring as a hover, and so does any letter a wider or narrower one pushes along; letters added or removed turn in from blank or out to blank. The width eases to the new word's over the first letter's `timing`, so text beside it glides along instead of jumping. A shorter word keeps the old one's room until its letters have turned away. With reduced motion on the text changes at once.
+
+Screen readers, selection and copying get the new text as soon as `text` changes, as one word, from an unseen copy of the text under the turning letters. A selection's highlight is drawn behind the letters in the usual colour, or a page's own `::selection` background; `--rt-selection` sets it for the roll alone.
 
 ### Split-flap tiles
 
