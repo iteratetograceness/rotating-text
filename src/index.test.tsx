@@ -46,8 +46,8 @@ const px = (value: string) => parseFloat(value)
 const angle = (el: HTMLElement) =>
   Number(/rotateX\(([-\d.e]+)deg\)/.exec(el.style.transform)![1])
 
-// Smoke tests against the real framer-motion. The prop-level behavior is
-// covered in index.variants.test.tsx, which stubs out motion components.
+// Smoke tests against the real animations in ./motion. The prop-level
+// behavior is covered in index.variants.test.tsx, which stubs them out.
 describe('RotatingText', () => {
   it('renders each letter of the text on the front and back faces', () => {
     const { container } = render(<RotatingText text='hello' />)
