@@ -543,8 +543,8 @@ const FlapTile = ({
 
   const tile = React.useRef<HTMLSpanElement>(null)
   const flap = React.useRef<HTMLSpanElement>(null)
-  const frontShade = React.useRef<HTMLSpanElement>(null)
-  const backShade = React.useRef<HTMLSpanElement>(null)
+  const front = React.useRef<HTMLSpanElement>(null)
+  const back = React.useRef<HTMLSpanElement>(null)
   const shadow = React.useRef<HTMLSpanElement>(null)
   const painted = React.useRef(NaN)
 
@@ -559,8 +559,14 @@ const FlapTile = ({
     const angle = (-rotateX * Math.PI) / 180
     const facing = Math.cos(angle - LIGHT)
     flap.current.style.transform = `rotateX(${rotateX}deg)`
-    frontShade.current!.style.opacity = String(shade(facing))
-    backShade.current!.style.opacity = String(shade(-facing))
+    // Each leaf is dimmed as a whole, which its layer can do without a
+    // repaint. At rest the front is fully lit and the back is hidden.
+    front.current!.style.filter = rotateX
+      ? `brightness(${1 - shade(facing)})`
+      : ''
+    back.current!.style.filter = rotateX
+      ? `brightness(${1 - shade(-facing)})`
+      : ''
     // How far down the bottom half the flap's shadow reaches, fading as the
     // flap closes over it
     const reach = Math.sin(angle) * Math.tan(LIGHT) - Math.cos(angle)
@@ -693,18 +699,20 @@ const FlapTile = ({
       </span>
       <span className={`${styles.half} ${styles.bottom}`} aria-hidden='true'>
         {faces.from}
-        <span ref={shadow} className={`${styles.shade} ${styles.shadow}`} />
+        <span ref={shadow} className={styles.shadow} />
       </span>
       <span aria-hidden='true' className={styles.flap} ref={flap}>
-        <span className={`${styles.half} ${styles.top} ${styles.leaf}`}>
+        <span
+          ref={front}
+          className={`${styles.half} ${styles.top} ${styles.leaf}`}
+        >
           {faces.from}
-          <span ref={frontShade} className={styles.shade} />
         </span>
         <span
+          ref={back}
           className={`${styles.half} ${styles.bottom} ${styles.leaf} ${styles.underside}`}
         >
           {faces.to}
-          <span ref={backShade} className={styles.shade} />
         </span>
       </span>
     </span>
