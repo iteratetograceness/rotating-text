@@ -3,11 +3,11 @@ import {
   animate as animateValue,
   clamp,
   transform as interpolate,
-  motion,
   motionValue,
+  useHover,
   useIsomorphicLayoutEffect,
   useReducedMotion
-} from 'framer-motion'
+} from './motion'
 import styles from './index.module.css'
 
 interface Props {
@@ -61,7 +61,7 @@ const ROLL_SHADE = [0, 0.75, 1, 0.75, 0]
 // timing it has (1 + 7.5) * e^-7.5 of the way left to go, just under 0.5%,
 // and it lets go within a tenth of a pixel of the new width, so the last
 // step can't be seen. A critically damped spring is settled by distance
-// alone; framer ignores a rest speed for it.
+// alone; the spring ignores a rest speed for it.
 const WIDTH_REST = 0.1 // pixels
 const widthSpring = (seconds: number, distance: number, velocity: number) => {
   const frequency = 7.5 / seconds
@@ -73,7 +73,7 @@ const widthSpring = (seconds: number, distance: number, velocity: number) => {
   return {
     type: 'spring' as const,
     stiffness,
-    // Written this way so framer takes the critically damped branch exactly
+    // Written this way so the spring takes the critically damped branch exactly
     damping: 2 * Math.sqrt(stiffness),
     mass: 1,
     velocity: toward > fastest ? fastest * Math.sign(distance) : velocity,
@@ -154,6 +154,10 @@ export const RotatingText = ({
     else if (startRoll.current) startRoll.current()
   }
 
+  // With reduced motion, a hover scales the text up a little instead
+  const root = React.useRef<HTMLDivElement>(null)
+  useHover(root, flip, still ? 1.05 : undefined)
+
   const rootClass = [
     styles.container,
     variant === 'flap' ? styles.board : '',
@@ -163,12 +167,7 @@ export const RotatingText = ({
     .join(' ')
 
   return (
-    <motion.div
-      className={rootClass}
-      whileHover={still ? { scale: 1.05 } : undefined}
-      onHoverStart={flip}
-      style={style}
-    >
+    <div className={rootClass} ref={root} style={style}>
       {variant === 'flap' ? (
         <FlapBoard
           letters={letters}
@@ -186,7 +185,7 @@ export const RotatingText = ({
           startRef={startRoll}
         />
       )}
-    </motion.div>
+    </div>
   )
 }
 
@@ -245,7 +244,7 @@ const RollFaces = ({
   // The text as of the last commit
   const latest = React.useRef(letters)
   const [, rerender] = React.useReducer((n: number) => n + 1, 0)
-  // Renders again once framer has let go of the turn that just ended, so a
+  // Renders again once the angle has let go of the turn that just ended, so a
   // turn that render starts on the same angle is its own
   const update = () => Promise.resolve().then(rerender)
 
@@ -297,7 +296,7 @@ const RollFaces = ({
 
   const turn = (angle: Angle, i: number, delay: number) => {
     turning.add(angle)
-    // Framer can report a turn stopped after it has completed
+    // A turn can be reported stopped after it has completed
     let over = false
     animateValue(angle, -90, {
       ...rollSpring(duration(i)),
@@ -381,6 +380,19 @@ const RollFaces = ({
   }
 
   useIsomorphicLayoutEffect(() => {
+    // A render in a transition can be committed well after it ran, while the
+    // letters went on turning, and a copy that has turned into view since
+    // would take its new letter in plain sight. If the letters have moved on,
+    // the roll renders again at once from where they are now, and that render
+    // replaces this one before it is painted.
+    if (
+      !still &&
+      !sameFaces(next, plan(faces, letters, angles, landing.current))
+    ) {
+      rerender()
+      return
+    }
+
     syncing.current = true
     try {
       sync()
@@ -477,6 +489,10 @@ const plan = (
   }
   return { front, back }
 }
+
+const sameFaces = (a: Faces, b: Faces) =>
+  a.front.length === b.front.length &&
+  a.front.every((char, i) => char === b.front[i] && a.back[i] === b.back[i])
 
 // How far along its row each letter starts, from the row's start edge. The
 // rows of front faces and copies start at the same place.

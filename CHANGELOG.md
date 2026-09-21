@@ -2,8 +2,21 @@
 
 ## Unreleased
 
+### Changes
+
+- framer-motion is no longer bundled into the package. The few parts of it the
+  component used (its frame loop, spring and tween, and hover) are ported into
+  `src/motion.ts` with the same arithmetic, so every frame renders as before.
+  `dist/index.modern.js` drops from 346 KB (84 KB gzipped) to 37 KB (10 KB
+  gzipped), and mounting takes 16 to 35% less main-thread time. React is
+  still the only dependency.
+
 ### Fixes
 
+- A roll text change rendered inside `startTransition` no longer changes a
+  letter that has already started turning into view. React can commit such a
+  render well after it ran; if letters have moved on in the meantime, the roll
+  renders again from where they are before the frame is painted.
 - A flap tile whose side falls between two device pixels no longer darkens
   that outer pixel column while the falling flap's shadow passes over it.
 
