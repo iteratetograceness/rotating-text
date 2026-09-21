@@ -44,8 +44,15 @@ const letterWidths = () => {
 
 const px = (value: string) => parseFloat(value)
 
-const angle = (el: HTMLElement) =>
-  Number(/rotateX\(([-\d.e]+)deg\)/.exec(el.style.transform)![1])
+// A roll letter's angle. At rest a front face is flat, with no rotateX, and
+// its copy is folded away a quarter turn on.
+const REST: Record<string, number> = { 'perspective(4em)': 0, 'scaleY(0)': 90 }
+const angle = (el: HTMLElement) => {
+  const turned = /rotateX\(([-\d.e]+)deg\)/.exec(el.style.transform)
+  if (turned) return Number(turned[1])
+  expect(Object.keys(REST)).toContain(el.style.transform)
+  return REST[el.style.transform]
+}
 
 // jsdom applies no stylesheet, so tests that depend on it read the rules
 const css = readFileSync(join(__dirname, 'index.module.css'), 'utf8').replace(
@@ -202,7 +209,7 @@ describe('RotatingText', () => {
     fireEvent.pointerEnter(container.firstElementChild!)
     await waitFor(() => expect(seen.some(([f]) => f < -85)).toBe(true))
     await waitFor(() => {
-      expect(frontLetter.style.transform).toContain('rotateX(0deg)')
+      expect(angle(frontLetter)).toBe(0)
       expect(frontLetter.style.opacity).toBe('1')
     })
 
@@ -210,8 +217,34 @@ describe('RotatingText', () => {
     for (const [f, b] of seen) expect(b - f).toBeCloseTo(90)
     // It swings past the next face before it settles
     expect(Math.min(...seen.map(([f]) => f))).toBeLessThan(-92)
-    expect(backLetter.style.transform).toContain('rotateX(90deg)')
+    expect(angle(backLetter)).toBe(90)
     expect(backLetter.style.opacity).toBe('0')
+  })
+
+  // A 3D transform or a hidden backface puts a letter on a layer of its own,
+  // so only a letter that is moving has either
+  it('turns a letter in 3D only while it moves', async () => {
+    expect(css.match(/\.face \{([^}]*)\}/)?.[1]).not.toMatch(/backface/)
+    const { container } = render(
+      <RotatingText text='hi' timing={0.3} stagger={0.2} />
+    )
+    const [, front, back] = Array.from(container.firstElementChild!.children)
+    const [h, i] = Array.from(front.children) as HTMLElement[]
+    const [hCopy, iCopy] = Array.from(back.children) as HTMLElement[]
+    fireEvent.pointerEnter(container.firstElementChild!)
+    await waitFor(() => expect(angle(h)).toBeLessThan(-10))
+    for (const face of [h, hCopy])
+      expect(face.style.transform).toMatch(/translateZ/)
+    // Still waiting its turn in the stagger
+    expect(i.style.transform).toBe('perspective(4em)')
+    expect(iCopy.style.transform).toBe('scaleY(0)')
+    await waitFor(() => expect(angle(i)).toBeLessThan(-10))
+    await waitFor(() => {
+      for (const face of [h, i])
+        expect(face.style.transform).toBe('perspective(4em)')
+      for (const face of [hCopy, iCopy])
+        expect(face.style.transform).toBe('scaleY(0)')
+    })
   })
 
   it('carries on to the next face through a second hover', async () => {
@@ -244,14 +277,12 @@ describe('RotatingText', () => {
     )
     const frontLetter = container.querySelector('span')!
     fireEvent.pointerEnter(container.firstElementChild!)
-    await waitFor(() =>
-      expect(frontLetter.style.transform).not.toContain('rotateX(0deg)')
-    )
+    await waitFor(() => expect(angle(frontLetter)).not.toBe(0))
     rerender(<RotatingText text='yo' timing={0.3} stagger={0.01} />)
 
     // Same element, still part way through its turn
     expect(container.querySelector('span')).toBe(frontLetter)
-    expect(frontLetter.style.transform).not.toContain('rotateX(0deg)')
+    expect(angle(frontLetter)).not.toBe(0)
     await waitFor(() => expect(frontLetter.textContent).toBe('y'))
   })
 
@@ -267,8 +298,8 @@ describe('RotatingText', () => {
       container.querySelectorAll('span')
     )
     await waitFor(() => {
-      expect(frontLetter.style.transform).toContain('rotateX(0deg)')
-      expect(secondLetter.style.transform).toContain('rotateX(0deg)')
+      expect(angle(frontLetter)).toBe(0)
+      expect(angle(secondLetter)).toBe(0)
     })
     const seen: number[] = []
     watch(frontLetter, () => seen.push(angle(frontLetter)))
@@ -288,7 +319,7 @@ describe('RotatingText', () => {
     await waitFor(() => {
       expect(front.textContent).toBe('xy')
       for (const letter of Array.from(front.querySelectorAll('span'))) {
-        expect(letter.style.transform).toContain('rotateX(0deg)')
+        expect(angle(letter)).toBe(0)
       }
     })
   })
@@ -307,7 +338,7 @@ describe('RotatingText', () => {
     await waitFor(() => {
       expect(front.textContent).toBe('yo')
       for (const letter of Array.from(front.querySelectorAll('span'))) {
-        expect(letter.style.transform).toContain('rotateX(0deg)')
+        expect(angle(letter)).toBe(0)
         expect(letter.style.opacity).toBe('1')
       }
       for (const letter of Array.from(back.querySelectorAll('span'))) {
@@ -317,7 +348,7 @@ describe('RotatingText', () => {
     // and they stay there rather than finishing an old turn
     await new Promise((resolve) => setTimeout(resolve, 100))
     for (const letter of Array.from(front.querySelectorAll('span'))) {
-      expect(letter.style.transform).toContain('rotateX(0deg)')
+      expect(angle(letter)).toBe(0)
     }
   })
 

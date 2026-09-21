@@ -47,10 +47,16 @@ const rollSpring = (seconds: number) => {
 // The turn is about an axis set back behind the letter by --rt-depth. The
 // perspective sits outside that offset, so a letter at rest is drawn at its
 // true size rather than magnified.
-// The letters keep this 3D transform at rest too, so their text rendering
-// doesn't shift when a flip starts or ends.
 const rollTransform = (rotateX: number) =>
   `perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(${rotateX}deg) translateZ(var(--rt-depth))`
+// A letter only turns in 3D while it is moving. At rest it keeps the same
+// matrix with the turn left out, which draws its text exactly as the turn
+// does at 0 degrees, but with no 3D step in it the browser doesn't give each
+// letter a layer of its own. (A flat transform such as translate(0) moves
+// the text's anti-aliasing, and none would cost a layout per letter each
+// time a turn starts.) The copy, a quarter turn away and faded out, is
+// folded to nothing, as it was edge on.
+const rollRest = (offset: number) => (offset ? 'scaleY(0)' : 'perspective(4em)')
 const ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85]
 const ROLL_SHADE = [0, 0.75, 1, 0.75, 0]
 
@@ -658,7 +664,7 @@ const RollLetter = React.memo(function RollLetter({
     const follow = (a: number) => {
       const el = face.current
       if (!el) return
-      el.style.transform = rollTransform(a + offset)
+      el.style.transform = a ? rollTransform(a + offset) : rollRest(offset)
       el.style.opacity = String(rollShade(a + offset))
     }
     // The markup already draws the face at rest
@@ -673,7 +679,7 @@ const RollLetter = React.memo(function RollLetter({
     <span
       className={styles.face}
       ref={face}
-      style={{ transform: rollTransform(offset), opacity: rollShade(offset) }}
+      style={{ transform: rollRest(offset), opacity: rollShade(offset) }}
     >
       {char}
     </span>

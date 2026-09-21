@@ -18,6 +18,11 @@
   letters, which are only drawn, so the motion is unchanged. A selection's
   highlight is drawn behind the letters, which keep their own colour; set
   `--rt-selection` to give it a colour of your own.
+- Roll letters are only 3D while they turn. At rest each letter keeps the
+  same transform matrix without the 3D steps in it, so it draws exactly as
+  before but no longer needs a compositor layer of its own: 32 letters at
+  rest go from 69 layers to 4 in Chromium, and a flip across them spends 19%
+  less time layerizing and 37% less committing.
 
 ### Fixes
 

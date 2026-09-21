@@ -462,6 +462,9 @@ var rollSpring = function rollSpring(seconds) {
 var rollTransform = function rollTransform(rotateX) {
   return "perspective(4em) translateZ(calc(-1 * var(--rt-depth))) rotateX(" + rotateX + "deg) translateZ(var(--rt-depth))";
 };
+var rollRest = function rollRest(offset) {
+  return offset ? 'scaleY(0)' : 'perspective(4em)';
+};
 var ROLL_SHADE_ANGLES = [-85, -60, 0, 60, 85];
 var ROLL_SHADE = [0, 0.75, 1, 0.75, 0];
 var WIDTH_REST = 0.1;
@@ -912,7 +915,7 @@ var RollLetter = memo(function RollLetter(_ref4) {
     var follow = function follow(a) {
       var el = face.current;
       if (!el) return;
-      el.style.transform = rollTransform(a + offset);
+      el.style.transform = a ? rollTransform(a + offset) : rollRest(offset);
       el.style.opacity = String(rollShade(a + offset));
     };
     if (angle.get() !== 0) follow(angle.get());
@@ -922,7 +925,7 @@ var RollLetter = memo(function RollLetter(_ref4) {
     className: styles.face,
     ref: face,
     style: {
-      transform: rollTransform(offset),
+      transform: rollRest(offset),
       opacity: rollShade(offset)
     }
   }, _char8);
