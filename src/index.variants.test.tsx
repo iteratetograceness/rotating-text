@@ -156,7 +156,7 @@ describe('RotatingText', () => {
     rerender(<RotatingText text='abcd' timing={0.4} stagger={0.25} />)
 
     expect(letters(container)).toHaveLength(8)
-    const [front, back] = Array.from(root(container).children)
+    const [, front, back] = Array.from(root(container).children)
     expect(Array.from(front.children, (el) => el.textContent)).toEqual([
       'a',
       'b',
@@ -206,7 +206,7 @@ describe('RotatingText', () => {
     rerender(<RotatingText text='xbz' stagger={0.2} timing={[0.3, 0.5]} />)
     // The old letters stay on the front faces and the new ones are on the
     // copies, which the turn brings round
-    const [front, back] = Array.from(root(container).children)
+    const [, front, back] = Array.from(root(container).children)
     expect(front.textContent).toBe('abc')
     expect(back.textContent).toBe('xbz')
     // Only the changed letters turn, each in its place in the stagger and
@@ -224,7 +224,7 @@ describe('RotatingText', () => {
     vi.mocked(useReducedMotion).mockReturnValue(true)
     const { container, rerender } = render(<RotatingText text='ab' />)
     rerender(<RotatingText text='cde' />)
-    const [front, back] = Array.from(root(container).children)
+    const [, front, back] = Array.from(root(container).children)
     expect(front.textContent).toBe('cde')
     expect(back.textContent).toBe('cde')
     expect(animate).not.toHaveBeenCalled()

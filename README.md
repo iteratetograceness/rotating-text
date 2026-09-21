@@ -52,6 +52,8 @@ function MyApp() {
 
 When `text` changes on the roll, each letter that changed turns over to the new one, in the same stagger and spring as a hover, and so does any letter a wider or narrower one pushes along; letters added or removed turn in from blank or out to blank. The width eases to the new word's over the first letter's `timing`, so text beside it glides along instead of jumping. A shorter word keeps the old one's room until its letters have turned away. With reduced motion on the text changes at once.
 
+Screen readers, selection and copying get the new text as soon as `text` changes, as one word, from an unseen copy of the text under the turning letters. A selection's highlight is drawn behind the letters in the usual colour, or a page's own `::selection` background; `--rt-selection` sets it for the roll alone.
+
 ### Split-flap tiles
 
 `variant="flap"` draws every letter on its own tile, split by a seam. On hover or tap the top half of each tile falls over the seam and bounces to rest, like a departures board. When `text` changes, each tile flips from its old letter to its new one, so a board can count, cycle words or follow typing; tiles added or removed flip in from blank or out to blank. A space becomes a blank tile, so padding the text to one length (`word.padEnd(6)`) keeps a board the same number of tiles, like a real one. With reduced motion on, letters change in place without flipping.
