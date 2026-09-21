@@ -41,6 +41,12 @@
   changing `text` re-renders only the letters that changed. Changing 32
   letters now takes about a third of the React time and two thirds of the
   main-thread time it did. The motion is unchanged.
+- Flap tiles shade their turning faces with a brightness filter and draw the
+  shadow on the bottom half on a layer of its own, so shading no longer
+  repaints the tile every frame. A 32-letter flip paints a third as often and
+  spends about a tenth of the time rasterizing. The shading looks the same,
+  except that with a see-through `--rt-tile` the page behind a turning face
+  is no longer darkened with it.
 - A flap tile flipping its letter over itself on hover no longer re-renders
   as the flap falls and lands, which leaves the settle as its only render
   after the flip starts. The motion is unchanged.

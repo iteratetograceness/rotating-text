@@ -142,6 +142,13 @@
   backface-visibility: hidden;
 }
 
+/* A turning face is dimmed with a filter (see paint()). Keeping the filter
+   on the face's layer means a face that goes from unshaded to shaded does
+   not repaint. */
+.tile[data-turning] .leaf {
+  will-change: filter;
+}
+
 /* The back of the flap carries the bottom half, upside down until it lands.
    At rest it faces away, so it is hidden, and flipped flat rather than
    turned: a transform of some kind throughout means going 3D needs no new
