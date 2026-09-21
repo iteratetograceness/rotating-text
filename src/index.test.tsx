@@ -486,6 +486,127 @@ describe('RotatingText', () => {
     })
   })
 
+  // A text change in a transition is rendered a slice at a time, and the
+  // letters go on turning between the slices. Here the render is held open,
+  // behind components that take their time, until `ready` says so, and then
+  // it is committed at once. Changes are made outside act, so React yields
+  // between the slices as it does in a browser.
+  const heldTransition = (text: string, props: object) => {
+    let change!: (text: string) => void
+    let ready = () => true
+    const Slow = () => {
+      if (!ready()) {
+        const until = performance.now() + 6
+        while (performance.now() < until);
+      }
+      return null
+    }
+    const App = () => {
+      const [shown, setShown] = React.useState(text)
+      change = setShown
+      return (
+        <React.Fragment>
+          <RotatingText text={shown} {...props} />
+          {shown !== text &&
+            Array.from({ length: 400 }, (_, i) => <Slow key={i} />)}
+        </React.Fragment>
+      )
+    }
+    const view = render(<App />)
+    const [front, back] = Array.from(view.container.firstElementChild!.children)
+    const changeLater = (to: string, until: () => boolean) => {
+      ready = until
+      React.startTransition(() => change(to))
+    }
+    return { ...view, front, back, change, changeLater }
+  }
+
+  // Records a copy's angle and letter as they are at the end of each task,
+  // which is what the browser paints
+  const watchCopy = (row: Element, i: number) => {
+    const copy = () => row.children[i] as HTMLElement
+    const state = (): [number, string] => [angle(copy()), copy().textContent!]
+    const seen = [state()]
+    // Letters the copy held only part way through a task, never painted
+    const unpainted: string[] = []
+    const observer = new MutationObserver((records) => {
+      const held = records
+        .filter((r) => r.type === 'characterData' && copy().contains(r.target))
+        .map((r) => r.oldValue!)
+      unpainted.push(...held.slice(1))
+      seen.push(state())
+    })
+    observer.observe(row, {
+      attributes: true,
+      characterData: true,
+      characterDataOldValue: true,
+      childList: true,
+      subtree: true
+    })
+    observers.push(observer)
+    // Frames where the copy showed another letter than in the frame before,
+    // while it could be seen in both
+    const swaps = () =>
+      seen.filter(
+        ([deg, char], k) =>
+          k > 0 &&
+          char !== seen[k - 1][1] &&
+          deg !== 90 &&
+          seen[k - 1][0] !== 90
+      )
+    return { copy, swaps, unpainted }
+  }
+
+  it('never swaps the letter on a copy that begins turning while a transition waits to commit', async () => {
+    const props = { timing: 0.5, stagger: 0.3 }
+    const { front, back, change, changeLater } = heldTransition('ab', props)
+    change('cd')
+    await waitFor(() => expect(back.textContent).toBe('cd'))
+    const { copy, swaps, unpainted } = watchCopy(back, 1)
+
+    // Rendered while the second letter waits its turn, and committed once
+    // its copy, still showing 'd', has turned into view
+    let late = false
+    changeLater('ce', () => late || (late = angle(copy()) < 60))
+    await waitFor(() => expect(late).toBe(true), { timeout: 2000 })
+
+    await waitFor(
+      () => {
+        expect(front.textContent).toBe('ce')
+        for (const letter of Array.from(front.children))
+          expect(angle(letter as HTMLElement)).toBe(0)
+      },
+      { timeout: 3000 }
+    )
+    expect(swaps()).toEqual([])
+    // The late commit did bring the 'e', and it was taken back unseen
+    expect(unpainted).toContain('e')
+  })
+
+  it('never swaps the letter on a copy that a hover turns while a transition waits to commit', async () => {
+    const props = { timing: 0.4, stagger: 0.1 }
+    const { container, front, back, changeLater } = heldTransition('ab', props)
+    const { copy, swaps, unpainted } = watchCopy(back, 0)
+
+    // Rendered at rest, and committed once a hover has turned the first
+    // copy, still showing 'a', into view
+    let late = false
+    changeLater('cd', () => late || (late = angle(copy()) < 60))
+    setTimeout(() => fireEvent.pointerEnter(container.firstElementChild!))
+    await waitFor(() => expect(late).toBe(true), { timeout: 2000 })
+
+    await waitFor(
+      () => {
+        expect(front.textContent).toBe('cd')
+        for (const letter of Array.from(front.children))
+          expect(angle(letter as HTMLElement)).toBe(0)
+      },
+      { timeout: 3000 }
+    )
+    expect(swaps()).toEqual([])
+    expect(unpainted).toContain('c')
+  })
+
   it('carries on from the width it has reached when the text changes again', async () => {
     letterWidths()
     const { container, rerender } = render(

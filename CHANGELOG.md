@@ -11,6 +11,13 @@
   gzipped), and mounting takes 16 to 35% less main-thread time. React is
   still the only dependency.
 
+### Fixes
+
+- A roll text change rendered inside `startTransition` no longer changes a
+  letter that has already started turning into view. React can commit such a
+  render well after it ran; if letters have moved on in the meantime, the roll
+  renders again from where they are before the frame is painted.
+
 ## 1.1.0 (2026-09-21)
 
 ### Features
