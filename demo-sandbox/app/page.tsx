@@ -87,7 +87,7 @@ export default function Home() {
         <section className={styles.hero}>
           <div className={styles.eyebrow}>
             <span className='label'>Now flipping</span>
-            <span className='label'>React 18, Framer Motion, MIT</span>
+            <span className='label'>React 18, no other dependencies, MIT</span>
           </div>
           <h1 className={styles.heroWords}>
             <span className='sr-only'>Rotating Text</span>
@@ -95,8 +95,8 @@ export default function Home() {
             <Flip text='TEXT' variant='flap' />
           </h1>
           <p className={styles.lede}>
-            A 3D flip-on-hover text component for React, built with Framer
-            Motion. Hover the name.
+            A 3D flip-on-hover text component for React, with no dependencies
+            beyond React. Hover the name.
           </p>
           <p className={styles.hint}>
             <span className={styles.hoverHint}>
@@ -135,7 +135,7 @@ export default function Home() {
             </li>
           </ol>
           <p className={styles.peer}>
-            Peer dependency: React 18. Framer Motion is bundled.
+            Peer dependency: React 18. Nothing else is installed.
           </p>
         </section>
 

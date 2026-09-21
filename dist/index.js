@@ -945,12 +945,16 @@ var FlapBoard = function FlapBoard(_ref5) {
     }),
     gone = _React$useState7[0];
   var length = React.useRef(letters.length);
+  var trim = function trim(n) {
+    while (n > length.current && gone.has(n - 1)) n--;
+    return n;
+  };
   useIsomorphicLayoutEffect(function () {
     length.current = letters.length;
     gone.forEach(function (i) {
       if (i < letters.length) gone["delete"](i);
     });
-    setSlots(count);
+    setSlots(trim(count));
   }, [count, letters.length]);
   var mounted = React.useRef(false);
   React.useEffect(function () {
@@ -958,10 +962,7 @@ var FlapBoard = function FlapBoard(_ref5) {
   }, []);
   var blank = React.useCallback(function (i) {
     gone.add(i);
-    setSlots(function (n) {
-      while (n > length.current && gone.has(n - 1)) n--;
-      return n;
-    });
+    setSlots(trim);
   }, []);
   return React.createElement(React.Fragment, null, Array.from({
     length: count
@@ -1063,7 +1064,6 @@ var FlapTile = function FlapTile(_ref6) {
   useIsomorphicLayoutEffect(function () {
     wanted.current = _char9;
     if (still) {
-      if (running.current) running.current.stop();
       shown.current = _char9;
       if (busy.current || faces.from !== _char9 || faces.to !== _char9) settle(_char9);
     } else if (!busy.current) {
@@ -1076,10 +1076,7 @@ var FlapTile = function FlapTile(_ref6) {
             to: _char9
           });
         });
-      } else {
-        running.current.stop();
-        settle(_char9);
-      }
+      } else settle(_char9);
     }
   }, [_char9, still, onBlank]);
   var shuffled = React.useRef(shuffles);
@@ -1131,6 +1128,7 @@ var FlapTile = function FlapTile(_ref6) {
   }, [faces.turn]);
   useIsomorphicLayoutEffect(function () {
     if (!faces.settled) return;
+    if (running.current) running.current.stop();
     paint(0);
     busy.current = false;
     if (wanted.current !== shown.current) turn(0);else restingBlank();
