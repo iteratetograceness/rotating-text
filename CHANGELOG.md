@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- A flap tile whose side falls between two device pixels no longer darkens
+  that outer pixel column while the falling flap's shadow passes over it.
+
 ## 1.1.0 (2026-09-21)
 
 ### Features

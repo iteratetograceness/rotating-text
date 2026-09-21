@@ -8591,7 +8591,7 @@ function useReducedMotion() {
     return shouldReduceMotion;
 }
 
-var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shadow":"_3IP-G"};
+var styles = {"container":"_p6aGD","front":"_2ilYQ","back":"_uQNyq","copy":"_vUZF4","face":"_3fNHM","placeholder":"_3HCUh","board":"_1_y2_","tile":"_1wa55","sizer":"_2mmHj","half":"_Nsxbx","readable":"_1Gz1Q","top":"_DeXoq","bottom":"_YO7Gy","flap":"_2OAp6","leaf":"_3WYvH","underside":"_1aEQP","shade":"_1QeiK","shadow":"_3IP-G"};
 
 var ROLL_DAMPING = 0.65;
 var ROLL_REST = 0.5;
@@ -9284,9 +9284,11 @@ var FlapTile = function FlapTile(_ref6) {
     className: styles.half + " " + styles.bottom,
     "aria-hidden": 'true'
   }, faces.from, React.createElement("span", {
+    className: styles.shade
+  }, React.createElement("span", {
     ref: shadow,
     className: styles.shadow
-  })), React.createElement("span", {
+  }))), React.createElement("span", {
     "aria-hidden": 'true',
     className: styles.flap,
     ref: flap
