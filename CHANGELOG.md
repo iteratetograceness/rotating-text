@@ -23,6 +23,12 @@
   before but no longer needs a compositor layer of its own: 32 letters at
   rest go from 69 layers to 4 in Chromium, and a flip across them spends 19%
   less time layerizing and 37% less committing.
+- A roll letter that has turned while the rest of its row is still turning
+  now waits flat on its copy, off a layer of its own, as it does at rest.
+  During a 32-letter text change the roll used to keep two layers for every
+  letter that had turned until the last one landed. The turning letters'
+  depth is also written into their transforms as the stylesheet gives it
+  rather than through `var()`, which Chromium restyles about twice as fast.
 
 ### Fixes
 
@@ -43,6 +49,12 @@
 - A flap no longer throws when a hover starts a space's first flip and the
   same render ends the text before that space. The flip is called off before
   its flap moves.
+- When the roll's text changes again while letters are still turning, its
+  width no longer narrows under letters still showing the earlier text and
+  then widens again, which bounced the text after it back and forth. It is
+  held as wide as the widest letters on screen and eased toward the new
+  word's width no faster than about a pixel a frame, so changes in quick
+  succession carry the text beside it along smoothly.
 
 ## 1.1.0 (2026-09-21)
 
