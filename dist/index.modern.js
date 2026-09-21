@@ -476,6 +476,7 @@ var readDepth = function readDepth(row) {
   return literal && typeof CSS !== 'undefined' && CSS.supports('transform', rollTransform(0, literal)) ? literal : DEPTH;
 };
 var WIDTH_REST = 0.1;
+var WIDTH_PACE = 7.5 / Math.E / 60;
 var widthSpring = function widthSpring(seconds, distance, velocity) {
   var frequency = 7.5 / seconds;
   var stiffness = Math.pow(frequency, 2);
@@ -891,7 +892,8 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, span, still) 
     var velocity = eased.isAnimating() ? eased.getVelocity() : 0;
     if (!eased.isAnimating()) eased.jump(from);
     paint(eased.get());
-    var time = mixed ? Math.max(seconds, span) : seconds;
+    var distance = Math.abs(to - eased.get());
+    var time = mixed ? Math.max(seconds, Math.min(span, distance * WIDTH_PACE)) : seconds;
     animate(eased, to, _extends({}, widthSpring(time, to - eased.get(), velocity), {
       onUpdate: paint,
       onComplete: held ? undefined : release
