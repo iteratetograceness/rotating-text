@@ -90,6 +90,8 @@ const hover = (container: HTMLElement) =>
   act(() => propsOf.get(root(container))!.onHoverStart())
 // Each flap's animate() call as [from, to, options]
 const flips = () => vi.mocked(animate).mock.calls as any[]
+const sizers = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('[class*="sizer"]'))
 // The letters on a tile: static top, static bottom, flap front, flap back
 const faces = (tile: Element) =>
   Array.from(tile.querySelectorAll('span'))
@@ -384,6 +386,45 @@ describe('RotatingText', () => {
     expect(flips()[1].slice(0, 2)).toEqual([0, -180])
     expect(flips()[1][2].delay).toBe(0)
     expect(faces(tile)).toEqual(['d', 'b', 'b', 'd'])
+  })
+
+  it('does not render a tile again while a hover flips its letter over itself', () => {
+    const onRender = vi.fn()
+    const { container } = render(
+      <React.Profiler id='rt' onRender={onRender}>
+        <RotatingText text='ab' variant='flap' />
+      </React.Profiler>
+    )
+    hover(container)
+    const commits = onRender.mock.calls.length
+
+    // Nothing to make room for as the flaps fall, nor to swap as they land
+    const falls = flips()
+    act(() => falls.forEach(([, , fall]) => fall.onUpdate(-10)))
+    act(() => falls.forEach(([, , fall]) => fall.onComplete()))
+    expect(onRender).toHaveBeenCalledTimes(commits)
+    expect(sizers(container).map((el) => el.getAttribute('data-was'))).toEqual([
+      null,
+      null
+    ])
+  })
+
+  it('makes room for both letters when the text changes before a hover flap falls', () => {
+    const { container, rerender } = render(
+      <RotatingText text='ab' variant='flap' stagger={0.1} />
+    )
+    hover(container)
+    rerender(<RotatingText text='aW' variant='flap' stagger={0.1} />)
+    const [, second] = Array.from(root(container).children)
+    const [, , fall] = flips()[1]
+
+    act(() => fall.onUpdate(-10))
+    expect(sizers(container)[1].getAttribute('data-was')).toBe('b')
+    expect(sizers(container)[1].textContent).toBe('W')
+    expect(faces(second)).toEqual(['W', 'b', 'b', 'W'])
+
+    act(() => fall.onComplete())
+    expect(faces(second)).toEqual(['W', 'W', 'W', 'W'])
   })
 
   it('dims the flap faces while they turn and clears them at rest', () => {

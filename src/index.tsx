@@ -642,10 +642,14 @@ const FlapTile = ({
   useIsomorphicLayoutEffect(() => {
     if (!faces.turn) return
     paint(0)
+    // The flap brings another letter unless it flips one over itself (a
+    // hover). The faces always hold these two letters (`turn` and a letter
+    // change before the fall set both), so the refs answer without a render.
+    const changing = () => bringing.current !== shown.current
     const land = () => {
-      shown.current = bringing.current
       // The old letter is now under the flap, so it no longer sizes the tile
-      setFaces((f) => (f.from === f.to ? f : { ...f, from: f.to }))
+      if (changing()) setFaces((f) => ({ ...f, from: f.to }))
+      shown.current = bringing.current
       // With another letter waiting, the next flap drops at once
       if (wanted.current !== shown.current) return turn(0)
       running.current = animateValue(-180, -180 + 180 * BOUNCE_HEIGHT, {
@@ -663,7 +667,7 @@ const FlapTile = ({
         if (!falling.current && rotateX < 0) {
           // Too late to change letters now; the tile makes room for both
           falling.current = true
-          setFaces((f) => ({ ...f, falling: true }))
+          if (changing()) setFaces((f) => ({ ...f, falling: true }))
         }
         paint(rotateX)
       },
