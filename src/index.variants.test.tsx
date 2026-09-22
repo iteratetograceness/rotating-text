@@ -438,6 +438,75 @@ describe('RotatingText', () => {
     expect(faces(second)).toEqual(['W', 'W', 'W', 'W'])
   })
 
+  it('sizes a tile by the letter it shows until a hover flap falls, after an earlier flip', () => {
+    const { container, rerender } = render(
+      <RotatingText text='a' variant='flap' />
+    )
+    rerender(<RotatingText text='b' variant='flap' />)
+    const [, , fall] = flips()[0]
+    act(() => fall.onUpdate(-10))
+    act(() => fall.onComplete())
+    act(() => flips()[1][2].onComplete())
+
+    // At rest on b, flipped over itself, with new text before it falls
+    hover(container)
+    rerender(<RotatingText text='W' variant='flap' />)
+    expect(sizers(container)[0].textContent).toBe('b')
+    expect(sizers(container)[0].getAttribute('data-was')).toBe(null)
+  })
+
+  it('flips a tile added to longer text in from blank under StrictMode', () => {
+    const { rerender } = render(
+      <React.StrictMode>
+        <RotatingText text='a' variant='flap' />
+      </React.StrictMode>
+    )
+    rerender(
+      <React.StrictMode>
+        <RotatingText text='ab' variant='flap' />
+      </React.StrictMode>
+    )
+    // StrictMode stops the first flip as it mounts the tile again; the tile
+    // starts it again rather than staying down
+    const calls = vi.mocked(animate).mock
+    const last = calls.results[calls.results.length - 1].value
+    expect(calls.calls[calls.calls.length - 1].slice(0, 2)).toEqual([0, -180])
+    expect(last.stop).not.toHaveBeenCalled()
+  })
+
+  it('starts one flip for each hover, even when the board is shown again after suspending', () => {
+    let wait: Promise<void> | undefined
+    let resume = () => {}
+    const Pause = () => {
+      if (wait) throw wait
+      return null
+    }
+    const Page = ({ paused }: { paused: boolean }) => (
+      <React.Suspense fallback={null}>
+        <RotatingText text='ab' variant='flap' />
+        {paused && <Pause />}
+      </React.Suspense>
+    )
+    const { container, rerender } = render(<Page paused={false} />)
+    hover(container)
+    const falls = flips()
+    expect(falls).toHaveLength(2)
+    act(() => falls.forEach(([, , f]) => f.onComplete()))
+    act(() =>
+      flips()
+        .slice(2)
+        .forEach(([, , f]) => f.onComplete())
+    )
+    const settled = flips().length
+
+    wait = new Promise((resolve) => (resume = () => resolve()))
+    rerender(<Page paused />)
+    wait = undefined
+    rerender(<Page paused={false} />)
+    resume()
+    expect(flips()).toHaveLength(settled)
+  })
+
   it('dims the flap faces while they turn and clears them at rest', () => {
     const { container, rerender } = render(
       <RotatingText text='a' variant='flap' />

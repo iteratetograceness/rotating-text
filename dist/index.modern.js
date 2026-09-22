@@ -1,4 +1,4 @@
-import { useLayoutEffect, useEffect, useState, useRef, createElement, useReducer, Fragment, memo, useCallback } from 'react';
+import { useLayoutEffect, useEffect, useState, useRef, useMemo, createElement, useReducer, Fragment, memo, useCallback, useDeferredValue as useDeferredValue$1 } from 'react';
 
 function _extends() {
   _extends = Object.assign ? Object.assign.bind() : function (target) {
@@ -530,9 +530,6 @@ var lit = function lit(facing) {
 var shade = function shade(facing) {
   return Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)));
 };
-var dim = function dim(face, amount) {
-  face.style.filter = amount ? "brightness(" + (1 - amount) + ")" : '';
-};
 var RotatingText = function RotatingText(_ref) {
   var text = _ref.text,
     _ref$timing = _ref.timing,
@@ -546,18 +543,17 @@ var RotatingText = function RotatingText(_ref) {
   var prefersReducedMotion = useReducedMotion();
   var still = !!prefersReducedMotion;
   var startRoll = useRef();
-  var _React$useState = useState(0),
-    shuffles = _React$useState[0],
-    setShuffles = _React$useState[1];
+  var startFlap = useRef();
   var duration = function duration(i) {
     return Array.isArray(timing) ? timing[Math.min(i, timing.length - 1)] : timing;
   };
-  var letters = splitLetters(text);
+  var letters = useMemo(function () {
+    return splitLetters(text);
+  }, [text]);
   var flip = function flip() {
     if (still) return;
-    if (variant === 'flap') setShuffles(function (n) {
-      return n + 1;
-    });else if (startRoll.current) startRoll.current();
+    var start = variant === 'flap' ? startFlap.current : startRoll.current;
+    if (start) start();
   };
   var root = useRef(null);
   useHover(root, flip, still ? 1.05 : undefined);
@@ -570,8 +566,8 @@ var RotatingText = function RotatingText(_ref) {
     letters: letters,
     duration: duration,
     stagger: stagger,
-    shuffles: shuffles,
-    still: still
+    still: still,
+    startRef: startFlap
   }) : createElement(RollFaces, {
     letters: letters,
     duration: duration,
@@ -580,6 +576,7 @@ var RotatingText = function RotatingText(_ref) {
     startRef: startRoll
   }));
 };
+var useDeferredValue = useDeferredValue$1;
 var splitLetters = function splitLetters(text) {
   var Segmenter = Intl.Segmenter;
   return Segmenter ? Array.from(new Segmenter().segment(text), function (part) {
@@ -596,18 +593,18 @@ var RollFaces = function RollFaces(_ref2) {
     still = _ref2.still,
     startRef = _ref2.startRef;
   var angles = useRef([]).current;
+  var _React$useState = useState(function () {
+      return new Set();
+    }),
+    turning = _React$useState[0];
   var _React$useState2 = useState(function () {
       return new Set();
     }),
-    turning = _React$useState2[0];
+    hovered = _React$useState2[0];
   var _React$useState3 = useState(function () {
       return new Set();
     }),
-    hovered = _React$useState3[0];
-  var _React$useState4 = useState(function () {
-      return new Set();
-    }),
-    moved = _React$useState4[0];
+    moved = _React$useState3[0];
   var faces = useRef({
     front: letters,
     back: letters
@@ -822,10 +819,10 @@ var useEasedWidth = function useEasedWidth(size, holding, seconds, span, still) 
   var front = useRef(null);
   var back = useRef(null);
   var text = useRef(null);
-  var _React$useState5 = useState(function () {
+  var _React$useState4 = useState(function () {
       return motionValue(0);
     }),
-    eased = _React$useState5[0];
+    eased = _React$useState4[0];
   var natural = useRef(NaN);
   var heading = useRef({
     rows: [0, 0],
@@ -955,31 +952,32 @@ var RollLetter = memo(function RollLetter(_ref4) {
   }, _char8);
 });
 var FlapBoard = function FlapBoard(_ref5) {
-  var letters = _ref5.letters,
+  var latest = _ref5.letters,
     duration = _ref5.duration,
     stagger = _ref5.stagger,
-    shuffles = _ref5.shuffles,
-    still = _ref5.still;
-  var _React$useState6 = useState(letters.length),
-    slots = _React$useState6[0],
-    setSlots = _React$useState6[1];
+    still = _ref5.still,
+    startRef = _ref5.startRef;
+  var letters = useDeferredValue(latest);
+  var _React$useState5 = useState(letters.length),
+    slots = _React$useState5[0],
+    setSlots = _React$useState5[1];
   var count = still ? letters.length : Math.max(slots, letters.length);
-  var _React$useState7 = useState(function () {
+  var _React$useState6 = useState(function () {
       return new Set();
     }),
-    gone = _React$useState7[0];
+    gone = _React$useState6[0];
   var length = useRef(letters.length);
   var trim = function trim(n) {
     while (n > length.current && gone.has(n - 1)) n--;
     return n;
   };
   useIsomorphicLayoutEffect(function () {
-    length.current = letters.length;
+    length.current = Math.max(letters.length, latest.length);
     gone.forEach(function (i) {
-      if (i < letters.length) gone["delete"](i);
+      if (i < length.current) gone["delete"](i);
     });
     setSlots(trim(count));
-  }, [count, letters.length]);
+  }, [count, letters.length, latest.length]);
   var mounted = useRef(false);
   useEffect(function () {
     mounted.current = true;
@@ -988,6 +986,31 @@ var FlapBoard = function FlapBoard(_ref5) {
     gone.add(i);
     setSlots(trim);
   }, []);
+  var _React$useState7 = useState(function () {
+      return [];
+    }),
+    hovers = _React$useState7[0];
+  var _React$useState8 = useState(0),
+    hovered = _React$useState8[0],
+    setHovered = _React$useState8[1];
+  var started = useRef(0);
+  useIsomorphicLayoutEffect(function () {
+    startRef.current = function () {
+      return setHovered(function (n) {
+        return n + 1;
+      });
+    };
+    return function () {
+      startRef.current = undefined;
+    };
+  }, []);
+  useIsomorphicLayoutEffect(function () {
+    if (hovered === started.current) return;
+    started.current = hovered;
+    hovers.forEach(function (start) {
+      return start && start();
+    });
+  }, [hovered]);
   return createElement(Fragment, null, Array.from({
     length: count
   }, function (_, i) {
@@ -997,24 +1020,24 @@ var FlapBoard = function FlapBoard(_ref5) {
       "char": i < letters.length ? letters[i] : ' ',
       duration: duration(i),
       delay: i * stagger,
-      shuffles: shuffles,
+      hovers: hovers,
       still: still,
-      enter: mounted.current && !still,
+      mounted: mounted,
       onBlank: i < letters.length ? undefined : blank
     });
   }));
 };
-var FlapTile = function FlapTile(_ref6) {
+var FlapTile = memo(function FlapTile(_ref6) {
   var _char9 = _ref6["char"],
     duration = _ref6.duration,
     delay = _ref6.delay,
-    shuffles = _ref6.shuffles,
+    hovers = _ref6.hovers,
     still = _ref6.still,
-    enter = _ref6.enter,
+    mounted = _ref6.mounted,
     index = _ref6.index,
     onBlank = _ref6.onBlank;
-  var _React$useState8 = useState(function () {
-      var first = enter ? ' ' : _char9;
+  var _React$useState9 = useState(function () {
+      var first = mounted.current && !still ? ' ' : _char9;
       return {
         from: first,
         to: first,
@@ -1023,8 +1046,8 @@ var FlapTile = function FlapTile(_ref6) {
         settled: 0
       };
     }),
-    faces = _React$useState8[0],
-    setFaces = _React$useState8[1];
+    faces = _React$useState9[0],
+    setFaces = _React$useState9[1];
   var shown = useRef(faces.to);
   var wanted = useRef(_char9);
   var busy = useRef(false);
@@ -1034,36 +1057,68 @@ var FlapTile = function FlapTile(_ref6) {
   var running = useRef();
   var seconds = useRef(duration);
   var leave = useRef(onBlank);
+  var rendered = useRef(faces);
+  var pending = useRef(false);
   useIsomorphicLayoutEffect(function () {
+    rendered.current = faces;
+    pending.current = false;
     seconds.current = duration >= 0 ? duration : 0.5;
     leave.current = onBlank;
   });
+  var change = function change(next) {
+    pending.current = true;
+    setFaces(next);
+  };
+  if (!still && !busy.current && _char9 !== shown.current && (faces.from !== shown.current || faces.to !== _char9)) {
+    setFaces(_extends({}, faces, {
+      from: shown.current,
+      to: _char9,
+      falling: false
+    }));
+  }
+  var showing = function showing(from, to) {
+    var f = rendered.current;
+    return !pending.current && f.from === from && f.to === to;
+  };
   var tile = useRef(null);
   var flap = useRef(null);
   var front = useRef(null);
   var back = useRef(null);
   var shadow = useRef(null);
-  var painted = useRef(NaN);
+  var painted = useRef(0);
+  var _React$useState10 = useState(function () {
+      return new Map();
+    }),
+    written = _React$useState10[0];
+  var write = function write(el, key, name, value) {
+    if (written.get(key) === value) return;
+    written.set(key, value);
+    el.style.setProperty(name, value);
+  };
+  var dim = function dim(face, key, amount) {
+    return write(face, key, 'filter', amount ? "brightness(" + (1 - amount) + ")" : '');
+  };
   var paint = function paint(rotateX) {
     if (!flap.current || rotateX === painted.current) return;
     painted.current = rotateX;
     var turning = rotateX !== 0;
-    tile.current.toggleAttribute('data-turning', turning);
+    if (tile.current.hasAttribute('data-turning') !== turning) tile.current.toggleAttribute('data-turning', turning);
     var angle = -rotateX * Math.PI / 180;
     var facing = Math.cos(angle - LIGHT);
-    flap.current.style.transform = "rotateX(" + rotateX + "deg)";
-    dim(front.current, turning ? shade(facing) : 0);
-    dim(back.current, turning ? shade(-facing) : 0);
+    write(flap.current, 'flap', 'transform', "rotateX(" + rotateX + "deg)");
+    dim(front.current, 'front', turning ? shade(facing) : 0);
+    dim(back.current, 'back', turning ? shade(-facing) : 0);
     var reach = Math.sin(angle) * Math.tan(LIGHT) - Math.cos(angle);
-    shadow.current.style.transform = "scaleY(" + clamp(0, 1, reach) + ")";
-    shadow.current.style.opacity = String(SHADOW * clamp(0, 1, (180 + rotateX) / 12));
+    write(shadow.current, 'reach', 'transform', "scaleY(" + clamp(0, 1, reach) + ")");
+    write(shadow.current, 'fade', 'opacity', String(SHADOW * clamp(0, 1, (180 + rotateX) / 12)));
   };
   var turn = function turn(delay) {
     busy.current = true;
     falling.current = false;
     wait.current = delay;
     bringing.current = wanted.current;
-    setFaces(function (f) {
+    if (showing(shown.current, wanted.current)) return fall();
+    change(function (f) {
       return _extends({}, f, {
         from: shown.current,
         to: wanted.current,
@@ -1073,7 +1128,8 @@ var FlapTile = function FlapTile(_ref6) {
     });
   };
   var settle = function settle(letter) {
-    return setFaces(function (f) {
+    if (showing(letter, letter)) return settled();
+    change(function (f) {
       return _extends({}, f, {
         from: letter,
         to: letter,
@@ -1095,28 +1151,31 @@ var FlapTile = function FlapTile(_ref6) {
     } else if (!falling.current) {
       if (_char9 !== shown.current) {
         bringing.current = _char9;
-        setFaces(function (f) {
+        change(function (f) {
           return _extends({}, f, {
-            to: _char9
+            to: _char9,
+            falling: false
           });
         });
       } else settle(_char9);
     }
   }, [_char9, still, onBlank]);
-  var shuffled = useRef(shuffles);
-  useEffect(function () {
-    if (shuffles === shuffled.current) return;
-    shuffled.current = shuffles;
-    if (!busy.current && !leave.current) turn(delay);
-  }, [shuffles]);
   useIsomorphicLayoutEffect(function () {
-    if (!faces.turn) return;
+    var hover = function hover() {
+      if (!busy.current && !leave.current) turn(delay);
+    };
+    hovers[index] = hover;
+    return function () {
+      if (hovers[index] === hover) hovers[index] = undefined;
+    };
+  });
+  var fall = function fall() {
     paint(0);
     var changing = function changing() {
       return bringing.current !== shown.current;
     };
     var land = function land() {
-      if (changing()) setFaces(function (f) {
+      if (changing()) change(function (f) {
         return _extends({}, f, {
           from: f.to
         });
@@ -1139,7 +1198,7 @@ var FlapTile = function FlapTile(_ref6) {
       onUpdate: function onUpdate(rotateX) {
         if (!falling.current && rotateX < 0) {
           falling.current = true;
-          if (changing()) setFaces(function (f) {
+          if (changing()) change(function (f) {
             return _extends({}, f, {
               falling: true
             });
@@ -1149,17 +1208,24 @@ var FlapTile = function FlapTile(_ref6) {
       },
       onComplete: land
     });
-  }, [faces.turn]);
+  };
   useIsomorphicLayoutEffect(function () {
-    if (!faces.settled) return;
+    if (faces.turn) fall();
+  }, [faces.turn]);
+  var settled = function settled() {
     if (running.current) running.current.stop();
     paint(0);
     busy.current = false;
     if (wanted.current !== shown.current) turn(0);else restingBlank();
+  };
+  useIsomorphicLayoutEffect(function () {
+    if (faces.settled) settled();
   }, [faces.settled]);
   useEffect(function () {
     return function () {
       if (running.current) running.current.stop();
+      busy.current = false;
+      falling.current = false;
     };
   }, []);
   var was = faces.falling && faces.from !== faces.to ? faces.from : undefined;
@@ -1190,7 +1256,7 @@ var FlapTile = function FlapTile(_ref6) {
     ref: back,
     className: styles.half + " " + styles.bottom + " " + styles.leaf + " " + styles.underside
   }, faces.to)));
-};
+});
 
 export { RotatingText };
 //# sourceMappingURL=index.modern.js.map

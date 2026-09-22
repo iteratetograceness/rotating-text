@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Changes
+
+- The flap costs less to run, and every frame renders as before. A hover
+  flip no longer renders the tiles through React: 32 tiles go from 35
+  commits to 1, and the flip starts in the same frame as before. Style
+  work drops 22 to 27% across flips and text changes, and a 32-tile flip
+  takes 15% less main-thread time. Tiles restyle less while they turn, and
+  an idle tile no longer paints its folded-away shadow.
+- New text for the flap renders in the background, a few tiles at a time,
+  and tiles whose letter stays the same aren't rendered again. The longest
+  task in a 32-tile text change drops from 47 ms to 20 ms at 4x CPU
+  slowdown, and a 12-tile change no longer drops a frame.
+- The flap's halves take their corner radius from `--rt-radius` rather than
+  inheriting it from the tile, which spares them a restyle on every frame of
+  a turn. A page that rounds the tiles through its own selector rather than
+  `--rt-radius` should set `--rt-radius` instead.
+
 ## 1.2.0 (2026-09-21)
 
 ### Changes
