@@ -55,8 +55,8 @@ export function CopyButton({ text, what }: { text: string; what: string }) {
         {state === 'copied'
           ? `Copied ${what} to the clipboard`
           : state === 'failed'
-          ? `Couldn't copy the ${what}`
-          : ''}
+            ? `Couldn't copy the ${what}`
+            : ''}
       </span>
     </>
   )

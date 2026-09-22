@@ -9,6 +9,13 @@ import {
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import styles from './index.module.css'
 
+// A computed style with some values swapped. jsdom checks that its methods
+// are called on the real declaration, so they are bound to it.
+const readStyle = (style: CSSStyleDeclaration, key: string | symbol) => {
+  const value = (style as any)[key]
+  return typeof value === 'function' ? value.bind(style) : value
+}
+
 // The reader's reduced-motion setting, which a test turns on and off while
 // the page is open. The component starts listening to it the first time one
 // renders, so it is loaded afresh once this is in place.
@@ -41,7 +48,7 @@ afterEach(() => {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 300))
 
-// jsdom has no PointerEvent, so a mouse's is made from a MouseEvent
+// A mouse's pointer event, made from a MouseEvent with a pointer's fields
 const pointer = (type: string) => {
   const event = new MouseEvent(type)
   Object.defineProperties(event, {
@@ -298,7 +305,7 @@ describe('reduced motion turned on or off while the page is open', () => {
         kind.includes('placeholder') && (el as HTMLElement).style.width
       const width = held || `${el.textContent!.length * 10}px`
       return new Proxy(style, {
-        get: (target, key) => (key === 'width' ? width : (target as any)[key])
+        get: (target, key) => (key === 'width' ? width : readStyle(target, key))
       })
     })
     const props = { timing: 0.3, stagger: 0.03 }

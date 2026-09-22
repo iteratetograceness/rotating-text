@@ -68,8 +68,8 @@ const rollPose = (turned: number, shade: number, depth: string) =>
   turned === 0
     ? 'perspective(4em)'
     : shade
-    ? rollTransform(turned, depth)
-    : 'scaleY(0)'
+      ? rollTransform(turned, depth)
+      : 'scaleY(0)'
 
 // The letters turn about the depth the stylesheet gives them, read once for
 // a batch of turns. A page can't restyle it on the fly, as the letters set it
@@ -168,10 +168,10 @@ export const RotatingText = ({
   variant = 'roll',
   className,
   style
-}: Props) => {
+}: Props): React.ReactElement => {
   const prefersReducedMotion = useReducedMotion()
   const still = !!prefersReducedMotion
-  const startRoll = React.useRef<() => void>()
+  const startRoll = React.useRef<(() => void) | undefined>(undefined)
   // Flap tiles run their own flips; a hover tells them to by bumping this
   const [shuffles, setShuffles] = React.useState(0)
 
@@ -641,8 +641,8 @@ const useEasedWidth = (
     const to = !holding
       ? word
       : mixed
-      ? Math.max(word, rows[0] || 0, rows[1] || 0)
-      : word + Math.max(0, rows[0] - rows[1] || 0)
+        ? Math.max(word, rows[0] || 0, rows[1] || 0)
+        : word + Math.max(0, rows[0] - rows[1] || 0)
     natural.current = to
     const held = to - word >= WIDTH_REST
     // With no time for the first letter, the width changes at once
@@ -874,7 +874,7 @@ const FlapTile = ({
   const falling = React.useRef(false)
   const wait = React.useRef(0)
   const bringing = React.useRef(char) // letter on the back of the flap
-  const running = React.useRef<{ stop: () => void }>()
+  const running = React.useRef<{ stop: () => void } | undefined>(undefined)
   const seconds = React.useRef(duration)
   const leave = React.useRef(onBlank)
   useIsomorphicLayoutEffect(() => {

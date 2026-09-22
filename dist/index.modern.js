@@ -419,7 +419,7 @@ var useHover = function useHover(ref, onHoverStart, scale) {
       scale: scale
     };
   });
-  var resize = useRef();
+  var resize = useRef(undefined);
   useEffect(function () {
     var el = ref.current;
     var size = new MotionValue(1);
@@ -567,7 +567,7 @@ var RotatingText = function RotatingText(_ref) {
     style = _ref.style;
   var prefersReducedMotion = useReducedMotion();
   var still = !!prefersReducedMotion;
-  var startRoll = useRef();
+  var startRoll = useRef(undefined);
   var _React$useState = useState(0),
     shuffles = _React$useState[0],
     setShuffles = _React$useState[1];
@@ -1054,7 +1054,7 @@ var FlapTile = function FlapTile(_ref6) {
   var falling = useRef(false);
   var wait = useRef(0);
   var bringing = useRef(_char9);
-  var running = useRef();
+  var running = useRef(undefined);
   var seconds = useRef(duration);
   var leave = useRef(onBlank);
   useIsomorphicLayoutEffect(function () {

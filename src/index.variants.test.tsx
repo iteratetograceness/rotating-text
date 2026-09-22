@@ -41,6 +41,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+// A computed style with some values swapped. jsdom checks that its methods
+// are called on the real declaration, so they are bound to it.
+const readStyle = (style: CSSStyleDeclaration, key: string | symbol) => {
+  const value = (style as any)[key]
+  return typeof value === 'function' ? value.bind(style) : value
+}
+
 // jsdom does no layout, so the roll's rows of letters and its placeholder are
 // given 10px a letter, or the placeholder the width it is being held at
 const letterWidths = () => {
@@ -53,7 +60,7 @@ const letterWidths = () => {
     const natural = `${el.textContent!.length * 10}px`
     const width = row ? natural : (el as HTMLElement).style.width || natural
     return new Proxy(style, {
-      get: (target, key) => (key === 'width' ? width : (target as any)[key])
+      get: (target, key) => (key === 'width' ? width : readStyle(target, key))
     })
   })
 }

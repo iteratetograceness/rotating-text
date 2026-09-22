@@ -50,5 +50,5 @@ export declare const clamp: (min: number, max: number, v: number) => number;
 export declare const transform: (input: number[], output: number[], ease?: ((progress: number) => number)[] | undefined) => (v: number) => number;
 export declare const useIsomorphicLayoutEffect: typeof React.useEffect;
 export declare const useReducedMotion: () => boolean | null;
-export declare const useHover: (ref: React.RefObject<HTMLElement>, onHoverStart: () => void, scale?: number | undefined) => void;
+export declare const useHover: (ref: React.RefObject<HTMLElement | null>, onHoverStart: () => void, scale?: number | undefined) => void;
 export {};

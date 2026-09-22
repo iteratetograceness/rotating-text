@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changes
+
+- React 19 is supported. The `react` peer range is now `^18.0.0 || ^19.0.0`,
+  so installing next to React 19 no longer fails npm's peer check, and the
+  tests run on React 19 (and still pass on 18). The type declarations give
+  `RotatingText` a `React.ReactElement` return type instead of the global
+  `JSX.Element`, which React 19's types no longer have.
+
 ### Fixes
 
 - Turning reduced motion on or off now applies while the page is open. The
@@ -13,6 +21,16 @@
   hover scale now follows the setting while the pointer is over the text,
   scaling up or back down at once rather than on the next enter or leave.
   Server rendering and the first render are unchanged.
+
+### Internal
+
+- Dev dependencies are up to date: React 19, TypeScript 6, Vitest 5, jsdom
+  30, Testing Library 16 and Prettier 3. The ESLint 6 setup, which no script
+  ran, and react-scripts are removed. The build is unchanged: microbundle-crl
+  still compiles with its own TypeScript 3.9, from `tsconfig.build.json`, so
+  `dist` differs only where the source did. `npm run typecheck` checks the
+  source with TypeScript 6.
+- The demo site runs on Next 16 and React 19.
 
 ## 1.2.0 (2026-09-21)
 
