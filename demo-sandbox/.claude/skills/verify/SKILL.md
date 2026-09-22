@@ -5,7 +5,7 @@ description: How to verify changes to the demo-sandbox landing page end to end, 
 
 # Verifying the landing page
 
-1. `npx pnpm@7 install --frozen-lockfile` in `demo-sandbox`, then `npx next build` and `npx next start -p 3100`. The `@emotion/is-prop-valid` warning is expected.
+1. `npx pnpm@10 install --frozen-lockfile` in `demo-sandbox`, then `npx next build` and `npx next start -p 3100`. The `@emotion/is-prop-valid` warning is expected.
 2. Drive the page with Playwright (Chromium lives at `/opt/pw-browsers/chromium`):
    - Hover the hero and check that a letter's computed transform changes mid-flip.
    - Click each Copy button and read the text back from the clipboard (grant `clipboard-read` and `clipboard-write`).
