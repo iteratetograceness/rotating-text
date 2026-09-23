@@ -11,9 +11,16 @@
   takes 15% less main-thread time. Tiles restyle less while they turn, and
   an idle tile no longer paints its folded-away shadow.
 - New text for the flap renders in the background, a few tiles at a time,
-  and tiles whose letter stays the same aren't rendered again. The longest
-  task in a 32-tile text change drops from 47 ms to 20 ms at 4x CPU
-  slowdown, and a 12-tile change no longer drops a frame.
+  and tiles whose letter stays the same aren't rendered again. A tile still
+  waiting its turn in the stagger keeps its new letter off the faces its
+  flap hides until four tiles a frame have taken theirs, or its flap is
+  about to fall, so the page lays out and paints a long board's new text
+  over a few frames rather than all in one. Every tile flips on the same
+  frame as before and looks the same on every frame. The longest task in a
+  32-tile text change drops from 45 ms to 20 ms at 4x CPU slowdown, and the
+  change no longer drops a frame as it starts (it dropped 2 to 3 before).
+  The board's text is read and copied as the new text once those few
+  frames have passed: 8 frames for 32 tiles at 60fps.
 - The flap's halves take their corner radius from `--rt-radius` rather than
   inheriting it from the tile, which spares them a restyle on every frame of
   a turn. A page that rounds the tiles through its own selector rather than

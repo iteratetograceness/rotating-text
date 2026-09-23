@@ -2,7 +2,7 @@ import * as React from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spring } from 'framer-motion'
-import { animate, useReducedMotion } from './motion'
+import { animate, frameTime, useReducedMotion } from './motion'
 import { RotatingText } from '.'
 
 // Remember what each element was given to do on hover, so tests can start a
@@ -25,6 +25,8 @@ vi.mock('./motion', async (importOriginal) => {
         propsOf.set(ref.current!, { onHoverStart, scale })
       }),
     useReducedMotion: vi.fn(() => false),
+    // The frame the flaps' animations are on, which tests move on by hand
+    frameTime: vi.fn(),
     // Records every call. A rolling letter's turn (on its angle) runs; a
     // flap's (from a plain number) is held, so tests step it by calling its
     // onUpdate and onComplete
@@ -37,6 +39,7 @@ vi.mock('./motion', async (importOriginal) => {
 afterEach(() => {
   cleanup()
   vi.mocked(useReducedMotion).mockReturnValue(false)
+  nextFrame()
   vi.mocked(animate).mockClear()
   vi.restoreAllMocks()
 })
@@ -65,6 +68,11 @@ const letters = (container: HTMLElement) =>
   Array.from(container.querySelectorAll('span'))
 const hover = (container: HTMLElement) =>
   act(() => propsOf.get(root(container))!.onHoverStart())
+// Moves the flaps' animations on to a frame no test has used, which comes with
+// its own few reveals
+let frameCount = 0
+const nextFrame = () => vi.mocked(frameTime).mockReturnValue(++frameCount)
+nextFrame()
 // Each flap's animate() call as [from, to, options]
 const flips = () => vi.mocked(animate).mock.calls as any[]
 const sizers = (container: HTMLElement) =>
@@ -553,11 +561,13 @@ describe('RotatingText', () => {
     rerender(<RotatingText text='a' variant='flap' />)
     const tiles = () => root(container).children
 
+    // Tile 2 flips last, so blank goes on its faces a frame into its wait
+    const [one, two] = flips()
     expect(tiles()).toHaveLength(3)
+    act(() => two[2].onUpdate(0, -190))
     expect(faces(tiles()[2])).toEqual([' ', 'c', 'c', ' '])
 
     // Tile 1 comes to rest first, but the tile after it is still turning
-    const [one, two] = flips()
     act(() => one[2].onComplete())
     act(() => flips()[2][2].onComplete())
     expect(tiles()).toHaveLength(3)
@@ -565,6 +575,79 @@ describe('RotatingText', () => {
     act(() => two[2].onComplete())
     act(() => flips()[3][2].onComplete())
     expect(tiles()).toHaveLength(1)
+  })
+
+  it("keeps a waiting flap's new letter off the faces it hides until it nears its fall", () => {
+    const { container, rerender } = render(
+      <RotatingText text='abcdefg' variant='flap' stagger={1} />
+    )
+    rerender(<RotatingText text='ABCDEFG' variant='flap' stagger={1} />)
+    const tiles = root(container).children
+
+    // Only the first flap falls at once. The others keep showing their old
+    // letter on every face, which is all the flap lets be seen.
+    expect(faces(tiles[0])).toEqual(['A', 'a', 'a', 'A'])
+    expect(faces(tiles[6])).toEqual(['g', 'g', 'g', 'g'])
+
+    // Once the frame's few reveals are taken, only a flap close to its fall
+    // takes its letter
+    const falls = flips().map(([, , fall]) => fall)
+    nextFrame()
+    act(() => {
+      for (let i = 1; i <= 4; i++) falls[i].onUpdate(0, -5000)
+      falls[5].onUpdate(0, -5000)
+      falls[6].onUpdate(0, -100)
+    })
+    expect(faces(tiles[4])).toEqual(['E', 'e', 'e', 'E'])
+    expect(faces(tiles[5])).toEqual(['f', 'f', 'f', 'f'])
+    expect(faces(tiles[6])).toEqual(['G', 'g', 'g', 'G'])
+  })
+
+  it('puts new letters on the faces of a few waiting tiles a frame', () => {
+    const { container, rerender } = render(
+      <RotatingText text='abcdefghij' variant='flap' stagger={1} />
+    )
+    rerender(<RotatingText text='ABCDEFGHIJ' variant='flap' stagger={1} />)
+    const shown = () =>
+      Array.from(root(container).children, (tile) => faces(tile)[0]).join('')
+    const frame = () => {
+      nextFrame()
+      act(() => flips().forEach(([, , fall]) => fall.onUpdate(0, -5000)))
+    }
+    expect(shown()).toBe('Abcdefghij')
+    frame()
+    expect(shown()).toBe('ABCDEfghij')
+    frame()
+    expect(shown()).toBe('ABCDEFGHIj')
+    frame()
+    expect(shown()).toBe('ABCDEFGHIJ')
+  })
+
+  it('keeps the newest letter back on a waiting flap whose letter changes', () => {
+    const { container, rerender } = render(
+      <RotatingText text='ab' variant='flap' stagger={1} />
+    )
+    rerender(<RotatingText text='xy' variant='flap' stagger={1} />)
+    rerender(<RotatingText text='xz' variant='flap' stagger={1} />)
+    const tile = root(container).children[1]
+    expect(faces(tile)).toEqual(['b', 'b', 'b', 'b'])
+    expect(flips()).toHaveLength(2)
+
+    act(() => flips()[1][2].onUpdate(0, -100))
+    expect(faces(tile)).toEqual(['z', 'b', 'b', 'z'])
+  })
+
+  it("puts the new letter on a waiting flap's faces as it starts to fall", () => {
+    const { container, rerender } = render(
+      <RotatingText text='ab' variant='flap' stagger={1} />
+    )
+    rerender(<RotatingText text='xy' variant='flap' stagger={1} />)
+    const tile = root(container).children[1]
+    expect(faces(tile)).toEqual(['b', 'b', 'b', 'b'])
+
+    // No frame came round to it in time, as when the page is held up
+    act(() => flips()[1][2].onUpdate(-10, 10))
+    expect(faces(tile)).toEqual(['y', 'b', 'b', 'y'])
   })
 
   it('flips tiles added to longer text in from blank', () => {

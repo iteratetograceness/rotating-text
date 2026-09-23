@@ -116,6 +116,9 @@ var processFrame = function processFrame(timestamp) {
     onNextFrame(processFrame);
   }
 };
+var frameTime = function frameTime() {
+  return frame.timestamp;
+};
 var startLoop = function startLoop() {
   runNextFrame = true;
   useDefaultElapsed = true;
@@ -307,7 +310,7 @@ var animate = function animate(from, to, transition) {
         isComplete = state.done;
       }
       value.set(state.value);
-      if (onUpdate) onUpdate(state.value);
+      if (onUpdate) onUpdate(state.value, elapsed);
       if (isComplete) {
         update.cancel(run);
         resolve();
@@ -529,6 +532,22 @@ var lit = function lit(facing) {
 };
 var shade = function shade(facing) {
   return Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)));
+};
+var LEAD = 3 * MAX_ELAPSED;
+var REVEALS = 4;
+var reveals = {
+  at: -1,
+  left: 0
+};
+var reveal = function reveal() {
+  var now = frameTime();
+  if (reveals.at !== now) {
+    reveals.at = now;
+    reveals.left = REVEALS;
+  }
+  if (!reveals.left) return false;
+  reveals.left--;
+  return true;
 };
 var RotatingText = function RotatingText(_ref) {
   var text = _ref.text,
@@ -1042,6 +1061,7 @@ var FlapTile = memo(function FlapTile(_ref6) {
         from: first,
         to: first,
         falling: false,
+        held: false,
         turn: 0,
         settled: 0
       };
@@ -1069,11 +1089,15 @@ var FlapTile = memo(function FlapTile(_ref6) {
     pending.current = true;
     setFaces(next);
   };
+  var early = function early(delay) {
+    return delay * 1000 > LEAD + MAX_ELAPSED;
+  };
   if (!still && !busy.current && _char9 !== shown.current && (faces.from !== shown.current || faces.to !== _char9)) {
     setFaces(_extends({}, faces, {
       from: shown.current,
       to: _char9,
-      falling: false
+      falling: false,
+      held: early(delay)
     }));
   }
   var showing = function showing(from, to) {
@@ -1123,6 +1147,7 @@ var FlapTile = memo(function FlapTile(_ref6) {
         from: shown.current,
         to: wanted.current,
         falling: false,
+        held: wanted.current !== shown.current && early(delay),
         turn: f.turn + 1
       });
     });
@@ -1134,6 +1159,7 @@ var FlapTile = memo(function FlapTile(_ref6) {
         from: letter,
         to: letter,
         falling: false,
+        held: false,
         settled: f.settled + 1
       });
     });
@@ -1195,14 +1221,23 @@ var FlapTile = memo(function FlapTile(_ref6) {
       duration: seconds.current * FALL_SHARE,
       delay: wait.current,
       ease: fallEase,
-      onUpdate: function onUpdate(rotateX) {
+      onUpdate: function onUpdate(rotateX, elapsed) {
         if (!falling.current && rotateX < 0) {
           falling.current = true;
           if (changing()) change(function (f) {
             return _extends({}, f, {
-              falling: true
+              falling: true,
+              held: false
             });
           });
+        } else if (rendered.current.held && !pending.current) {
+          if (elapsed > -LEAD || reveal()) {
+            change(function (f) {
+              return _extends({}, f, {
+                held: false
+              });
+            });
+          }
         }
         paint(rotateX);
       },
@@ -1229,6 +1264,7 @@ var FlapTile = memo(function FlapTile(_ref6) {
     };
   }, []);
   var was = faces.falling && faces.from !== faces.to ? faces.from : undefined;
+  var to = faces.held ? faces.from : faces.to;
   return createElement("span", {
     className: styles.tile,
     ref: tile
@@ -1237,7 +1273,7 @@ var FlapTile = memo(function FlapTile(_ref6) {
     "data-was": was
   }, faces.falling ? faces.to : faces.from), createElement("span", {
     className: styles.half + " " + styles.top + " " + styles.readable
-  }, faces.to), createElement("span", {
+  }, to), createElement("span", {
     className: styles.half + " " + styles.bottom,
     "aria-hidden": 'true'
   }, faces.from, createElement("span", {
@@ -1255,7 +1291,7 @@ var FlapTile = memo(function FlapTile(_ref6) {
   }, faces.from), createElement("span", {
     ref: back,
     className: styles.half + " " + styles.bottom + " " + styles.leaf + " " + styles.underside
-  }, faces.to)));
+  }, to)));
 });
 
 export { RotatingText };

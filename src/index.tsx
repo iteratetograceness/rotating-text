@@ -2,6 +2,8 @@ import * as React from 'react'
 import {
   animate as animateValue,
   clamp,
+  frameTime,
+  MAX_ELAPSED,
   transform as interpolate,
   motionValue,
   useHover,
@@ -155,6 +157,26 @@ const SHADOW = 0.5
 const lit = (facing: number) => AMBIENT + (1 - AMBIENT) * Math.max(0, facing)
 const shade = (facing: number) =>
   Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)))
+
+// A tile waiting its turn in the stagger keeps its new letter off the faces
+// the flap hides, until its flap is this close to falling (three frames at
+// the longest a frame can count for) or until one of the few reveals the
+// page has each frame comes to it, whichever is first. So a long board's new
+// text reaches the page a few tiles a frame rather than all in one.
+const LEAD = 3 * MAX_ELAPSED // ms
+const REVEALS = 4 // tiles a frame
+// How many reveals are left in the frame being run
+const reveals = { at: -1, left: 0 }
+const reveal = () => {
+  const now = frameTime()
+  if (reveals.at !== now) {
+    reveals.at = now
+    reveals.left = REVEALS
+  }
+  if (!reveals.left) return false
+  reveals.left--
+  return true
+}
 
 export const RotatingText = ({
   text,
@@ -879,7 +901,8 @@ interface FlapProps {
 // it falls over the hinge it lands exactly over the bottom half and the new
 // letter is whole. Once it settles, the flap is put back up with the new
 // letter on both faces, so a tile at rest renders the same after a flip as
-// before it.
+// before it. A flap that falls a while from now can hold its new letter
+// back; until then its hidden faces show the letter it covers.
 const FlapTile = React.memo(function FlapTile({
   char,
   duration,
@@ -893,7 +916,14 @@ const FlapTile = React.memo(function FlapTile({
   const [faces, setFaces] = React.useState(() => {
     // Tiles added after the board's first render flip in from blank
     const first = mounted.current && !still ? ' ' : char
-    return { from: first, to: first, falling: false, turn: 0, settled: 0 }
+    return {
+      from: first,
+      to: first,
+      falling: false,
+      held: false, // the new letter isn't on the faces yet (see LEAD)
+      turn: 0,
+      settled: 0
+    }
   })
   const shown = React.useRef(faces.to) // letter showing once the flap lands
   const wanted = React.useRef(char)
@@ -918,6 +948,9 @@ const FlapTile = React.memo(function FlapTile({
     pending.current = true
     setFaces(next)
   }
+  // Whether a flap bringing a new letter this far off keeps it back for now.
+  // One that would already be within LEAD on its first frame doesn't.
+  const early = (delay: number) => delay * 1000 > LEAD + MAX_ELAPSED
   // A new letter for a tile at rest goes on its faces in the render that
   // brings it, rather than in a second render of every tile straight after.
   // The letter effect then finds the faces ready (see turn).
@@ -927,7 +960,13 @@ const FlapTile = React.memo(function FlapTile({
     char !== shown.current &&
     (faces.from !== shown.current || faces.to !== char)
   ) {
-    setFaces({ ...faces, from: shown.current, to: char, falling: false })
+    setFaces({
+      ...faces,
+      from: shown.current,
+      to: char,
+      falling: false,
+      held: early(delay)
+    })
   }
   // Whether every face already shows these letters, so a flip can start or
   // end without a render. (A tile marked falling with one letter on every
@@ -1005,6 +1044,7 @@ const FlapTile = React.memo(function FlapTile({
       from: shown.current,
       to: wanted.current,
       falling: false,
+      held: wanted.current !== shown.current && early(delay),
       turn: f.turn + 1
     }))
   }
@@ -1016,6 +1056,7 @@ const FlapTile = React.memo(function FlapTile({
       from: letter,
       to: letter,
       falling: false,
+      held: false,
       settled: f.settled + 1
     }))
   }
@@ -1081,11 +1122,15 @@ const FlapTile = React.memo(function FlapTile({
       duration: seconds.current * FALL_SHARE,
       delay: wait.current,
       ease: fallEase,
-      onUpdate: (rotateX: number) => {
+      onUpdate: (rotateX: number, elapsed: number) => {
         if (!falling.current && rotateX < 0) {
           // Too late to change letters now; the tile makes room for both
           falling.current = true
-          if (changing()) change((f) => ({ ...f, falling: true }))
+          if (changing()) change((f) => ({ ...f, falling: true, held: false }))
+        } else if (rendered.current.held && !pending.current) {
+          if (elapsed > -LEAD || reveal()) {
+            change((f) => ({ ...f, held: false }))
+          }
         }
         paint(rotateX)
       },
@@ -1125,13 +1170,15 @@ const FlapTile = React.memo(function FlapTile({
   // Until it falls, the tile is sized by the letter it shows; while it falls,
   // by whichever of the two letters is wider
   const was = faces.falling && faces.from !== faces.to ? faces.from : undefined
+  // Held back, the faces the flap hides show the letter it covers
+  const to = faces.held ? faces.from : faces.to
   return (
     <span className={styles.tile} ref={tile}>
       <span className={styles.sizer} data-was={was}>
         {faces.falling ? faces.to : faces.from}
       </span>
       <span className={`${styles.half} ${styles.top} ${styles.readable}`}>
-        {faces.to}
+        {to}
       </span>
       <span className={`${styles.half} ${styles.bottom}`} aria-hidden='true'>
         {faces.from}
@@ -1150,7 +1197,7 @@ const FlapTile = React.memo(function FlapTile({
           ref={back}
           className={`${styles.half} ${styles.bottom} ${styles.leaf} ${styles.underside}`}
         >
-          {faces.to}
+          {to}
         </span>
       </span>
     </span>
