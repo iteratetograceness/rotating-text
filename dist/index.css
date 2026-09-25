@@ -194,7 +194,10 @@
   position: absolute;
   inset: 0;
   background: var(--rt-tile, #1d1d1f);
-  border-radius: inherit;
+  /* The tile's own radius, written out rather than inherited: a half that
+     inherits it is restyled whenever the flap above it is, every frame of a
+     turn. */
+  border-radius: var(--rt-radius, 0.06em);
   overflow: hidden;
 }
 
@@ -211,7 +214,6 @@
 ._2OAp6 {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
   /* Where every flip leaves it. This keeps the flap on a layer at rest,
      which is what keeps the seam and letters rendering the same before,
      during and after a flip; a flat flap moves the seam's anti-aliasing. */
@@ -257,8 +259,7 @@
    corners too small to see make it a mask, anti-aliased like the half's own
    edges; a plain rectangle would clip the shadow's layer to whole pixels,
    and on a tile whose side falls between pixels the shadow would then
-   darken the page beside the tile. It stays on at rest: switching it on
-   for each turn lays out and repaints every tile. */
+   darken the page beside the tile. */
 ._1QeiK {
   position: absolute;
   inset: 0;
@@ -269,6 +270,13 @@
           clip-path: inset(
     calc(50% + var(--rt-seam-width, max(1px, 0.012em)) / 2) 0 0 0 round 0.001px
   );
+  /* At rest the shadow is folded away, and hidden it isn't painted at all,
+     which spares the browser the mask on every idle tile each frame */
+  visibility: hidden;
+}
+
+._1wa55[data-turning] ._1QeiK {
+  visibility: inherit;
 }
 
 /* The falling flap's shadow on the bottom half grows down from the hinge,
