@@ -1,14 +1,15 @@
-import {
-  Big_Shoulders_Display,
-  IBM_Plex_Mono,
-  IBM_Plex_Sans
-} from '@next/font/google'
+import type { Metadata, Viewport } from 'next'
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google'
+import localFont from 'next/font/local'
 import { AnalyticsWrapper } from './components/analytics'
 import './globals.css'
 
-const display = Big_Shoulders_Display({
-  weight: ['700', '800'],
-  subsets: ['latin'],
+// Big Shoulders Display's latin subset, as Google served it. next/font/google
+// only knows the newer Big Shoulders, whose top optical size sets about 3%
+// wider, which would widen every tile. OFL, see fonts/OFL.txt.
+const display = localFont({
+  src: './fonts/BigShouldersDisplay-latin.woff2',
+  weight: '100 900',
   display: 'swap',
   variable: '--font-display'
 })
@@ -27,6 +28,23 @@ const mono = IBM_Plex_Mono({
   variable: '--font-mono'
 })
 
+export const metadata: Metadata = {
+  metadataBase: new URL('https://rotating-text.vercel.app'),
+  title: 'Rotating Text: 3D flip text for React',
+  description:
+    'A 3D flip-on-hover text component for React, with no dependencies beyond React.',
+  icons: { icon: '/favicon.ico' }
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#0E1526' },
+    { media: '(prefers-color-scheme: light)', color: '#ECE8DD' }
+  ]
+}
+
 export default function RootLayout({
   children
 }: {
@@ -37,11 +55,6 @@ export default function RootLayout({
       lang='en'
       className={`${display.variable} ${sans.variable} ${mono.variable}`}
     >
-      {/*
-        <head /> will contain the components returned by the nearest parent
-        head.tsx. Find out more at https://beta.nextjs.org/docs/api-reference/file-conventions/head
-      */}
-      <head />
       <body>
         {children}
         <AnalyticsWrapper />

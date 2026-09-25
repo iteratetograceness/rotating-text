@@ -422,7 +422,7 @@ var useHover = function useHover(ref, onHoverStart, scale) {
       scale: scale
     };
   });
-  var resize = useRef();
+  var resize = useRef(undefined);
   useEffect(function () {
     var el = ref.current;
     var size = new MotionValue(1);
@@ -583,8 +583,8 @@ var RotatingText = function RotatingText(_ref) {
     style = _ref.style;
   var prefersReducedMotion = useReducedMotion();
   var still = !!prefersReducedMotion;
-  var startRoll = useRef();
-  var startFlap = useRef();
+  var startRoll = useRef(undefined);
+  var startFlap = useRef(undefined);
   var duration = function duration(i) {
     return Array.isArray(timing) ? timing[Math.min(i, timing.length - 1)] : timing;
   };
@@ -1097,7 +1097,7 @@ var FlapTile = memo(function FlapTile(_ref6) {
   var falling = useRef(false);
   var wait = useRef(0);
   var bringing = useRef(_char9);
-  var running = useRef();
+  var running = useRef(undefined);
   var seconds = useRef(duration);
   var leave = useRef(onBlank);
   var rendered = useRef(faces);

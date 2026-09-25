@@ -87,7 +87,9 @@ export default function Home() {
         <section className={styles.hero}>
           <div className={styles.eyebrow}>
             <span className='label'>Now flipping</span>
-            <span className='label'>React 18, no other dependencies, MIT</span>
+            <span className='label'>
+              React 18 or 19, no other dependencies, MIT
+            </span>
           </div>
           <h1 className={styles.heroWords}>
             <span className='sr-only'>Rotating Text</span>
@@ -135,7 +137,7 @@ export default function Home() {
             </li>
           </ol>
           <p className={styles.peer}>
-            Peer dependency: React 18. Nothing else is installed.
+            Peer dependency: React 18 or 19. Nothing else is installed.
           </p>
         </section>
 

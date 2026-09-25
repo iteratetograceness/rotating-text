@@ -16,44 +16,32 @@
     "node": ">=10"
   },
   "scripts": {
-    "build": "microbundle-crl --no-compress --format modern,cjs",
-    "start": "microbundle-crl watch --no-compress --format modern,cjs",
+    "build": "microbundle-crl --no-compress --format modern,cjs --tsconfig tsconfig.build.json",
+    "start": "microbundle-crl watch --no-compress --format modern,cjs --tsconfig tsconfig.build.json",
     "prepare": "run-s build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "react": "^18.0.0"
+    "react": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
-    "@testing-library/react": "^14.3.1",
-    "@types/node": "^12.12.38",
-    "@types/react": "^16.9.27",
-    "@types/react-dom": "^16.9.7",
-    "@typescript-eslint/eslint-plugin": "^2.26.0",
-    "@typescript-eslint/parser": "^2.26.0",
-    "babel-eslint": "^10.0.3",
-    "cross-env": "^7.0.2",
-    "eslint": "^6.8.0",
-    "eslint-config-prettier": "^6.7.0",
-    "eslint-config-standard": "^14.1.0",
-    "eslint-config-standard-react": "^9.2.0",
-    "eslint-plugin-import": "^2.18.2",
-    "eslint-plugin-node": "^11.0.0",
-    "eslint-plugin-prettier": "^3.1.1",
-    "eslint-plugin-promise": "^4.2.1",
-    "eslint-plugin-react": "^7.17.0",
-    "eslint-plugin-standard": "^4.0.1",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "framer-motion": "9.0.1",
-    "jsdom": "^26.1.0",
+    "jsdom": "^30.1.1",
     "microbundle-crl": "^0.13.10",
     "npm-run-all": "^4.1.5",
-    "prettier": "^2.0.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-scripts": "^3.4.1",
-    "typescript": "^3.7.5",
-    "vitest": "^3.2.7"
+    "prettier": "^3.9.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   },
   "files": [
     "dist"

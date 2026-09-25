@@ -28,7 +28,7 @@ async function writeClipboard(text: string) {
 
 export function CopyButton({ text, what }: { text: string; what: string }) {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const timer = useRef<number>()
+  const timer = useRef<number | undefined>(undefined)
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
@@ -55,8 +55,8 @@ export function CopyButton({ text, what }: { text: string; what: string }) {
         {state === 'copied'
           ? `Copied ${what} to the clipboard`
           : state === 'failed'
-          ? `Couldn't copy the ${what}`
-          : ''}
+            ? `Couldn't copy the ${what}`
+            : ''}
       </span>
     </>
   )

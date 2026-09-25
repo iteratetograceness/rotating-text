@@ -16,11 +16,22 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// jsdom's pointer events are not primary unless they say what they are, and
+// the component only follows a primary pointer
+const mouse = { pointerType: 'mouse' }
+
 // Calls `record` every time the element's style changes
 const watch = (el: Element, record: () => void) => {
   const observer = new MutationObserver(record)
   observer.observe(el, { attributes: true })
   observers.push(observer)
+}
+
+// A computed style with some values swapped. jsdom checks that its methods
+// are called on the real declaration, so they are bound to it.
+const readStyle = (style: CSSStyleDeclaration, key: string | symbol) => {
+  const value = (style as any)[key]
+  return typeof value === 'function' ? value.bind(style) : value
 }
 
 // jsdom does no layout, so letters are given 10px each, and a W 20px. The
@@ -38,7 +49,7 @@ const letterWidths = () => {
     const held = kind.includes('placeholder') && (el as HTMLElement).style.width
     const width = held || natural
     return new Proxy(style, {
-      get: (target, key) => (key === 'width' ? width : (target as any)[key])
+      get: (target, key) => (key === 'width' ? width : readStyle(target, key))
     })
   })
 }
@@ -225,7 +236,7 @@ describe('RotatingText', () => {
     watch(frontLetter, record)
     watch(backLetter, record)
 
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await waitFor(() => expect(seen.some(([, b]) => b < 0)).toBe(true))
     await waitFor(() => {
       expect(angle(frontLetter)).toBe(0)
@@ -254,7 +265,7 @@ describe('RotatingText', () => {
     const [, front, back] = Array.from(container.firstElementChild!.children)
     const [h, i] = Array.from(front.children) as HTMLElement[]
     const [hCopy, iCopy] = Array.from(back.children) as HTMLElement[]
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await waitFor(() => expect(angle(h)).toBeLessThan(-10))
     for (const face of [h, hCopy])
       expect(face.style.transform).toMatch(/translateZ/)
@@ -314,7 +325,7 @@ describe('RotatingText', () => {
                 name === '--rt-depth'
                   ? ` ${depth}`
                   : target.getPropertyValue(name)
-            : (target as any)[key]
+            : readStyle(target, key)
       })
     })
     vi.stubGlobal('CSS', { supports: (_: string, v: string) => !/%/.test(v) })
@@ -327,7 +338,7 @@ describe('RotatingText', () => {
     const turning = () => /rotateX/.test(h.style.transform)
     const settled = () => h.style.transform === 'perspective(4em)'
 
-    fireEvent.pointerEnter(roll)
+    fireEvent.pointerEnter(roll, mouse)
     await waitFor(() => expect(turning()).toBe(true))
     expect(h.style.transform).toMatch(
       /^perspective\(4em\) translateZ\(calc\(-1 \* 0\.5lh\)\) rotateX\([-\d.e]+deg\) translateZ\(0\.5lh\)$/
@@ -335,8 +346,8 @@ describe('RotatingText', () => {
     await waitFor(() => expect(settled()).toBe(true))
 
     depth = '50%'
-    fireEvent.pointerLeave(roll)
-    fireEvent.pointerEnter(roll)
+    fireEvent.pointerLeave(roll, mouse)
+    fireEvent.pointerEnter(roll, mouse)
     await waitFor(() => expect(turning()).toBe(true))
     expect(h.style.transform).toMatch(/translateZ\(var\(--rt-depth\)\)$/)
   })
@@ -348,15 +359,15 @@ describe('RotatingText', () => {
     const root = container.firstElementChild!
     const [, front, copies] = Array.from(root.children)
     const frontLetter = front.querySelector('span')!
-    fireEvent.pointerEnter(root)
+    fireEvent.pointerEnter(root, mouse)
     await waitFor(() => expect(angle(frontLetter)).toBeLessThan(-30))
 
     const seen: number[] = []
     const record = () => seen.push(angle(frontLetter))
     watch(frontLetter, record)
     watch(copies.querySelector('span')!, record)
-    fireEvent.pointerLeave(root)
-    fireEvent.pointerEnter(root)
+    fireEvent.pointerLeave(root, mouse)
+    fireEvent.pointerEnter(root, mouse)
     await waitFor(() => expect(angle(frontLetter)).toBe(0))
 
     // It carried on to the next face and only then went back to rest,
@@ -373,7 +384,7 @@ describe('RotatingText', () => {
       <RotatingText text='hi' timing={0.3} stagger={0.01} />
     )
     const frontLetter = container.querySelector('span')!
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await waitFor(() => expect(angle(frontLetter)).not.toBe(0))
     rerender(<RotatingText text='yo' timing={0.3} stagger={0.01} />)
 
@@ -387,10 +398,10 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='hi' timing={0.2} stagger={0.01} />
     )
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await new Promise((resolve) => setTimeout(resolve, 50))
     rerender(<RotatingText text='yo' timing={0.05} stagger={0.01} />)
-    fireEvent.pointerLeave(container.firstElementChild!)
+    fireEvent.pointerLeave(container.firstElementChild!, mouse)
     const [frontLetter, secondLetter] = Array.from(
       container.querySelectorAll('span')
     )
@@ -400,7 +411,7 @@ describe('RotatingText', () => {
     })
     const seen: number[] = []
     watch(frontLetter, () => seen.push(angle(frontLetter)))
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await waitFor(() => expect(Math.min(...seen)).toBeLessThan(-85))
   })
 
@@ -409,7 +420,7 @@ describe('RotatingText', () => {
       <RotatingText text='abcd' timing={0.3} stagger={0.1} />
     )
     const [, front] = Array.from(container.firstElementChild!.children)
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await new Promise((resolve) => setTimeout(resolve, 60))
     rerender(<RotatingText text='xy' timing={0.3} stagger={0.1} />)
 
@@ -425,7 +436,7 @@ describe('RotatingText', () => {
     const { container, rerender } = render(
       <RotatingText text='hi' timing={0.4} stagger={0.01} />
     )
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await new Promise((resolve) => setTimeout(resolve, 60))
     rerender(<RotatingText text='' timing={0.4} stagger={0.01} />)
     await new Promise((resolve) => setTimeout(resolve, 50))
@@ -467,10 +478,10 @@ describe('RotatingText', () => {
 
     // Held at the old width, with the new letters cut off at its edge rather
     // than drawn over whatever comes after, and the old ones, which fit,
-    // left whole
+    // left whole, with a quarter em (of jsdom's 16px) to spare
     expect(placeholder.style.width).toBe('20px')
     expect(back.style.clipPath).toBe('inset(-1000px 30px -1000px -1000px)')
-    expect(front.style.clipPath).toBe('inset(-1000px 0px -1000px -1000px)')
+    expect(front.style.clipPath).toBe('inset(-1000px -4px -1000px -1000px)')
     expect(front.textContent).toBe('hi')
     expect(back.textContent).toBe('hello')
 
@@ -611,7 +622,7 @@ describe('RotatingText', () => {
       if (angle(third) < -85) turned = true
       else if (turned && angle(third) === 0) back.push(front.textContent!)
     })
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await new Promise((resolve) => setTimeout(resolve, 30))
     rerender(<RotatingText text='aWc' {...props} />)
     await waitFor(() => {
@@ -651,7 +662,7 @@ describe('RotatingText', () => {
     const second = container.querySelectorAll('span')[1]
     const seen: number[] = []
     watch(second, () => seen.push(angle(second)))
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     rerender(<RotatingText text='ad' {...props} />)
     rerender(<RotatingText text='ab' {...props} />)
     await waitFor(() => expect(Math.min(...seen)).toBeLessThan(-85))
@@ -674,7 +685,7 @@ describe('RotatingText', () => {
         lowest[i] = Math.min(lowest[i], angle(letter))
       })
     )
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     await waitFor(() => expect(Math.max(...lowest)).toBeLessThan(-85))
   })
 
@@ -770,7 +781,7 @@ describe('RotatingText', () => {
           deg !== 90 &&
           seen[k - 1][0] !== 90
       )
-    return { copy, swaps, unpainted }
+    return { copy, seen, swaps, unpainted }
   }
 
   it('never swaps the letter on a copy that begins turning while a transition waits to commit', async () => {
@@ -802,13 +813,15 @@ describe('RotatingText', () => {
   it('never swaps the letter on a copy that a hover turns while a transition waits to commit', async () => {
     const props = { timing: 0.4, stagger: 0.1 }
     const { container, front, back, changeLater } = heldTransition('ab', props)
-    const { copy, swaps, unpainted } = watchCopy(back, 0)
+    const { copy, seen, swaps, unpainted } = watchCopy(back, 0)
 
     // Rendered at rest, and committed once a hover has turned the first
     // copy, still showing 'a', into view
     let late = false
     changeLater('cd', () => late || (late = angle(copy()) < 60))
-    setTimeout(() => fireEvent.pointerEnter(container.firstElementChild!))
+    setTimeout(() =>
+      fireEvent.pointerEnter(container.firstElementChild!, mouse)
+    )
     await waitFor(() => expect(late).toBe(true), { timeout: 2000 })
 
     await waitFor(
@@ -820,7 +833,11 @@ describe('RotatingText', () => {
       { timeout: 3000 }
     )
     expect(swaps()).toEqual([])
-    expect(unpainted).toContain('c')
+    // The late commit may bring the 'c' and have it taken back unseen, or,
+    // as often happens under React 19, leave the turning copy on its 'a'.
+    // Either way the copy first shows the 'c' edge-on, once its turn is over.
+    const firstC = seen.find(([, char]) => char === 'c')
+    expect(unpainted.includes('c') || firstC?.[0] === 90).toBe(true)
   })
 
   it('holds room for the letters the copies are still turning to', async () => {
@@ -926,7 +943,7 @@ describe('RotatingText', () => {
     const flap = container.firstElementChild!.firstElementChild!
       .lastElementChild as HTMLElement
 
-    fireEvent.pointerEnter(container.firstElementChild!)
+    fireEvent.pointerEnter(container.firstElementChild!, mouse)
     const angle = () =>
       Number(/rotateX\((-?[\d.e-]+)deg\)/.exec(flap.style.transform)?.[1])
     await waitFor(() => expect(angle()).toBeLessThan(-90), { interval: 5 })
@@ -950,7 +967,7 @@ describe('RotatingText', () => {
         seen.push([angle(flap), tile.hasAttribute('data-turning')])
       )
     })
-    fireEvent.pointerEnter(board)
+    fireEvent.pointerEnter(board, mouse)
     await waitFor(() => {
       expect(seen.some(([deg]) => deg < -90)).toBe(true)
       expect(
@@ -996,7 +1013,7 @@ describe('RotatingText', () => {
       <RotatingText text='ab' {...props} />
     )
     const board = container.firstElementChild!
-    fireEvent.pointerEnter(board)
+    fireEvent.pointerEnter(board, mouse)
     await new Promise((resolve) => setTimeout(resolve, 30))
     rerender(<RotatingText text='xyz' {...props} />)
     rerender(<RotatingText text='no' {...props} />)
@@ -1077,7 +1094,7 @@ describe('RotatingText', () => {
       )
       return seen
     })
-    fireEvent.pointerEnter(board)
+    fireEvent.pointerEnter(board, mouse)
     expect(board.children).toHaveLength(1)
 
     // The 'a' flips over itself and comes back to rest

@@ -487,7 +487,7 @@ const isPrimaryPointer = (event: PointerEvent) =>
 // element scales on the spring framer gives scale by default, and at rest
 // its transform is none.
 export const useHover = (
-  ref: React.RefObject<HTMLElement>,
+  ref: React.RefObject<HTMLElement | null>,
   onHoverStart: () => void,
   scale?: number
 ) => {
@@ -497,7 +497,7 @@ export const useHover = (
   })
 
   // Moves the element to the size it should be at now
-  const resize = React.useRef<() => void>()
+  const resize = React.useRef<(() => void) | undefined>(undefined)
 
   React.useEffect(() => {
     const el = ref.current!

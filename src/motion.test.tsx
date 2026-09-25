@@ -238,7 +238,7 @@ describe('motion', () => {
     }))
 
   it('scales on hover as motion.div does with whileHover', async () => {
-    // jsdom has no PointerEvent, so a mouse event stands in for one
+    // A mouse event with a pointer's fields stands in for a pointer event
     const pointer = (
       el: Element,
       type: 'pointerenter' | 'pointerleave',
