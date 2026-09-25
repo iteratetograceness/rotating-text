@@ -17,7 +17,7 @@ type Job = (frame: Frame) => void
 // loop's first frame counts as one 60fps frame; after that, a frame is the
 // time since the last one, kept between 1 and 40 ms.
 const TIMESTEP = 1000 / 60
-const MAX_ELAPSED = 40
+export const MAX_ELAPSED = 40
 const frame: Frame = { delta: 0, timestamp: 0 }
 let useDefaultElapsed = true
 let runNextFrame = false
@@ -84,6 +84,9 @@ const processFrame = (timestamp: number) => {
     onNextFrame(processFrame)
   }
 }
+
+// When the frame being run was drawn, which stays the same for every job in it
+export const frameTime = () => frame.timestamp
 
 const startLoop = () => {
   runNextFrame = true
@@ -325,7 +328,8 @@ const tween = (
 
 export type AnimationOptions = (SpringOptions | TweenOptions) & {
   delay?: number // seconds
-  onUpdate?: (latest: number) => void
+  // With the ms since the delay ended, less than 0 during it
+  onUpdate?: (latest: number, elapsed: number) => void
   onComplete?: () => void
   onStop?: () => void
 }
@@ -363,7 +367,7 @@ export const animate = (
         isComplete = state.done
       }
       value.set(state.value)
-      if (onUpdate) onUpdate(state.value)
+      if (onUpdate) onUpdate(state.value, elapsed)
       if (isComplete) {
         update.cancel(run)
         resolve()

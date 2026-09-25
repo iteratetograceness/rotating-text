@@ -2,6 +2,8 @@ import * as React from 'react'
 import {
   animate as animateValue,
   clamp,
+  frameTime,
+  MAX_ELAPSED,
   transform as interpolate,
   motionValue,
   useHover,
@@ -155,10 +157,25 @@ const SHADOW = 0.5
 const lit = (facing: number) => AMBIENT + (1 - AMBIENT) * Math.max(0, facing)
 const shade = (facing: number) =>
   Math.max(0, 1 - lit(facing) / lit(Math.cos(LIGHT)))
-// A face with no shade carries no filter at all, so it renders as it does
-// at rest
-const dim = (face: HTMLElement, amount: number) => {
-  face.style.filter = amount ? `brightness(${1 - amount})` : ''
+
+// A tile waiting its turn in the stagger keeps its new letter off the faces
+// the flap hides, until its flap is this close to falling (three frames at
+// the longest a frame can count for) or until one of the few reveals the
+// page has each frame comes to it, whichever is first. So a long board's new
+// text reaches the page a few tiles a frame rather than all in one.
+const LEAD = 3 * MAX_ELAPSED // ms
+const REVEALS = 4 // tiles a frame
+// How many reveals are left in the frame being run
+const reveals = { at: -1, left: 0 }
+const reveal = () => {
+  const now = frameTime()
+  if (reveals.at !== now) {
+    reveals.at = now
+    reveals.left = REVEALS
+  }
+  if (!reveals.left) return false
+  reveals.left--
+  return true
 }
 
 export const RotatingText = ({
@@ -171,15 +188,18 @@ export const RotatingText = ({
 }: Props): React.ReactElement => {
   const prefersReducedMotion = useReducedMotion()
   const still = !!prefersReducedMotion
+  // Set by the letters or tiles on screen to start a hover's flip. They
+  // start themselves, so a hover renders none of them.
   const startRoll = React.useRef<(() => void) | undefined>(undefined)
-  // Flap tiles run their own flips; a hover tells them to by bumping this
-  const [shuffles, setShuffles] = React.useState(0)
+  const startFlap = React.useRef<(() => void) | undefined>(undefined)
 
   // Letters past the end of a timing array reuse its last entry
   const duration = (i: number) =>
     Array.isArray(timing) ? timing[Math.min(i, timing.length - 1)] : timing
 
-  const letters = splitLetters(text)
+  // The same array while the text stays the same, so a render with the same
+  // text has no new letters for the board to take in
+  const letters = React.useMemo(() => splitLetters(text), [text])
 
   // A second hover while letters are still moving is ignored, so a flip
   // always runs to the end instead of snapping back to the start. Rolling
@@ -187,8 +207,8 @@ export const RotatingText = ({
   // ignore a hover while they are turning.
   const flip = () => {
     if (still) return
-    if (variant === 'flap') setShuffles((n) => n + 1)
-    else if (startRoll.current) startRoll.current()
+    const start = variant === 'flap' ? startFlap.current : startRoll.current
+    if (start) start()
   }
 
   // With reduced motion, a hover scales the text up a little instead
@@ -210,8 +230,8 @@ export const RotatingText = ({
           letters={letters}
           duration={duration}
           stagger={stagger}
-          shuffles={shuffles}
           still={still}
+          startRef={startFlap}
         />
       ) : (
         <RollFaces
@@ -225,6 +245,9 @@ export const RotatingText = ({
     </div>
   )
 }
+
+// React 18's, which these React types are older than
+const useDeferredValue: <T>(value: T) => T = (React as any).useDeferredValue
 
 // Split into the characters a reader sees, so an accented letter or an emoji
 // with a skin tone stays in one piece.
@@ -772,20 +795,24 @@ interface BoardProps {
   letters: string[]
   duration: (i: number) => number
   stagger: number
-  shuffles: number
   still: boolean
+  startRef: React.MutableRefObject<(() => void) | undefined>
 }
 
 // Tiles are keyed by place, so each one flips from its old letter to its new
 // one. When the text gets shorter, the tiles past its end flip to blank and
 // are only taken away once they have come to rest.
 const FlapBoard = ({
-  letters,
+  letters: latest,
   duration,
   stagger,
-  shuffles,
-  still
+  still,
+  startRef
 }: BoardProps) => {
+  // New text renders in the background, a few tiles at a time, so a long
+  // board changing doesn't hold up a frame. Tiles whose letter hasn't
+  // changed aren't rendered at all.
+  const letters = useDeferredValue(latest)
   const [slots, setSlots] = React.useState(letters.length)
   const count = still ? letters.length : Math.max(slots, letters.length)
   // Tiles past the end of the text that have come to rest on blank
@@ -797,14 +824,16 @@ const FlapBoard = ({
     return n
   }
   useIsomorphicLayoutEffect(() => {
-    length.current = letters.length
+    // Longer text is already on its way before it reaches the tiles, so no
+    // tile it will cover is taken away in the meantime
+    length.current = Math.max(letters.length, latest.length)
     gone.forEach((i) => {
-      if (i < letters.length) gone.delete(i)
+      if (i < length.current) gone.delete(i)
     })
     // A tile already resting on blank (a space the text now ends before)
     // reported in its own effect, before this one knew the new length
     setSlots(trim(count))
-  }, [count, letters.length])
+  }, [count, letters.length, latest.length])
 
   // Tiles added after the first render flip in from blank
   const mounted = React.useRef(false)
@@ -817,6 +846,29 @@ const FlapBoard = ({
     setSlots(trim)
   }, [])
 
+  // What each tile does on a hover, set by the tile itself. A hover starts
+  // them in a render of the board rather than in the pointer event: the
+  // browser runs pointer events inside the frame it is about to draw, so
+  // starting every tile there would hold that frame back, and a render comes
+  // after it. The tiles' props don't change, so none of them renders.
+  const [hovers] = React.useState<((() => void) | undefined)[]>(() => [])
+  const [hovered, setHovered] = React.useState(0)
+  const started = React.useRef(0)
+  useIsomorphicLayoutEffect(() => {
+    startRef.current = () => setHovered((n) => n + 1)
+    return () => {
+      startRef.current = undefined
+    }
+  }, [])
+  // After the tiles' own effects, so in a render that changes them too they
+  // have set what they do on a hover. Only once for each hover, as a board
+  // shown again after suspending runs this again.
+  useIsomorphicLayoutEffect(() => {
+    if (hovered === started.current) return
+    started.current = hovered
+    hovers.forEach((start) => start && start())
+  }, [hovered])
+
   return (
     <React.Fragment>
       {Array.from({ length: count }, (_, i) => (
@@ -826,9 +878,9 @@ const FlapBoard = ({
           char={i < letters.length ? letters[i] : ' '}
           duration={duration(i)}
           delay={i * stagger}
-          shuffles={shuffles}
+          hovers={hovers}
           still={still}
-          enter={mounted.current && !still}
+          mounted={mounted}
           onBlank={i < letters.length ? undefined : blank}
         />
       ))}
@@ -840,9 +892,9 @@ interface FlapProps {
   char: string
   duration: number
   delay: number
-  shuffles: number
+  hovers: ((() => void) | undefined)[]
   still: boolean
-  enter: boolean
+  mounted: React.MutableRefObject<boolean>
   index: number
   onBlank?: (index: number) => void
 }
@@ -853,20 +905,29 @@ interface FlapProps {
 // it falls over the hinge it lands exactly over the bottom half and the new
 // letter is whole. Once it settles, the flap is put back up with the new
 // letter on both faces, so a tile at rest renders the same after a flip as
-// before it.
-const FlapTile = ({
+// before it. A flap that falls a while from now can hold its new letter
+// back; until then its hidden faces show the letter it covers.
+const FlapTile = React.memo(function FlapTile({
   char,
   duration,
   delay,
-  shuffles,
+  hovers,
   still,
-  enter,
+  mounted,
   index,
   onBlank
-}: FlapProps) => {
+}: FlapProps) {
   const [faces, setFaces] = React.useState(() => {
-    const first = enter ? ' ' : char
-    return { from: first, to: first, falling: false, turn: 0, settled: 0 }
+    // Tiles added after the board's first render flip in from blank
+    const first = mounted.current && !still ? ' ' : char
+    return {
+      from: first,
+      to: first,
+      falling: false,
+      held: false, // the new letter isn't on the faces yet (see LEAD)
+      turn: 0,
+      settled: 0
+    }
   })
   const shown = React.useRef(faces.to) // letter showing once the flap lands
   const wanted = React.useRef(char)
@@ -877,18 +938,68 @@ const FlapTile = ({
   const running = React.useRef<{ stop: () => void } | undefined>(undefined)
   const seconds = React.useRef(duration)
   const leave = React.useRef(onBlank)
+  // The faces as last committed, and whether a change to them is on its way
+  const rendered = React.useRef(faces)
+  const pending = React.useRef(false)
   useIsomorphicLayoutEffect(() => {
+    rendered.current = faces
+    pending.current = false
     // An empty or broken timing falls back to the default
     seconds.current = duration >= 0 ? duration : 0.5
     leave.current = onBlank
   })
+  const change = (next: (f: typeof faces) => typeof faces) => {
+    pending.current = true
+    setFaces(next)
+  }
+  // Whether a flap bringing a new letter this far off keeps it back for now.
+  // One that would already be within LEAD on its first frame doesn't.
+  const early = (delay: number) => delay * 1000 > LEAD + MAX_ELAPSED
+  // A new letter for a tile at rest goes on its faces in the render that
+  // brings it, rather than in a second render of every tile straight after.
+  // The letter effect then finds the faces ready (see turn).
+  if (
+    !still &&
+    !busy.current &&
+    char !== shown.current &&
+    (faces.from !== shown.current || faces.to !== char)
+  ) {
+    setFaces({
+      ...faces,
+      from: shown.current,
+      to: char,
+      falling: false,
+      held: early(delay)
+    })
+  }
+  // Whether every face already shows these letters, so a flip can start or
+  // end without a render. (A tile marked falling with one letter on every
+  // face renders as one that isn't.)
+  const showing = (from: string, to: string) => {
+    const f = rendered.current
+    return !pending.current && f.from === from && f.to === to
+  }
 
   const tile = React.useRef<HTMLSpanElement>(null)
   const flap = React.useRef<HTMLSpanElement>(null)
   const front = React.useRef<HTMLSpanElement>(null)
   const back = React.useRef<HTMLSpanElement>(null)
   const shadow = React.useRef<HTMLSpanElement>(null)
-  const painted = React.useRef(NaN)
+  // The flap starts at rest, as its styles draw it
+  const painted = React.useRef(0)
+  // What paint() last wrote, so a frame that changes nothing on an element
+  // doesn't touch it and the browser has nothing of it to restyle
+  const [written] = React.useState(() => new Map<string, string>())
+  const write = (el: HTMLElement, key: string, name: string, value: string) => {
+    if (written.get(key) === value) return
+    written.set(key, value)
+    el.style.setProperty(name, value)
+  }
+
+  // A face with no shade carries no filter at all, so it renders as it does
+  // at rest
+  const dim = (face: HTMLElement, key: string, amount: number) =>
+    write(face, key, 'filter', amount ? `brightness(${1 - amount})` : '')
 
   // Written straight to the DOM, in the same frame as the letters change,
   // so the flap never shows a frame of the next letter before it resets.
@@ -898,45 +1009,61 @@ const FlapTile = ({
     // The flap is 3D only while it is down, from its first frame off the
     // top to the one that puts it back up
     const turning = rotateX !== 0
-    tile.current!.toggleAttribute('data-turning', turning)
+    if (tile.current!.hasAttribute('data-turning') !== turning)
+      tile.current!.toggleAttribute('data-turning', turning)
     const angle = (-rotateX * Math.PI) / 180
     const facing = Math.cos(angle - LIGHT)
-    flap.current.style.transform = `rotateX(${rotateX}deg)`
+    write(flap.current, 'flap', 'transform', `rotateX(${rotateX}deg)`)
     // Each leaf is dimmed as a whole, which its layer can do without a
     // repaint. At rest the front is fully lit and the back is hidden.
-    dim(front.current!, turning ? shade(facing) : 0)
-    dim(back.current!, turning ? shade(-facing) : 0)
+    dim(front.current!, 'front', turning ? shade(facing) : 0)
+    dim(back.current!, 'back', turning ? shade(-facing) : 0)
     // How far down the bottom half the flap's shadow reaches, fading as the
     // flap closes over it
     const reach = Math.sin(angle) * Math.tan(LIGHT) - Math.cos(angle)
-    shadow.current!.style.transform = `scaleY(${clamp(0, 1, reach)})`
-    shadow.current!.style.opacity = String(
-      SHADOW * clamp(0, 1, (180 + rotateX) / 12)
+    write(
+      shadow.current!,
+      'reach',
+      'transform',
+      `scaleY(${clamp(0, 1, reach)})`
+    )
+    write(
+      shadow.current!,
+      'fade',
+      'opacity',
+      String(SHADOW * clamp(0, 1, (180 + rotateX) / 12))
     )
   }
 
+  // The faces take the letters first, then the flap falls (see below). A
+  // flip over the letter already showing, as on a hover, falls at once.
   const turn = (delay: number) => {
     busy.current = true
     falling.current = false
     wait.current = delay
     bringing.current = wanted.current
-    setFaces((f) => ({
+    if (showing(shown.current, wanted.current)) return fall()
+    change((f) => ({
       ...f,
       from: shown.current,
       to: wanted.current,
       falling: false,
+      held: wanted.current !== shown.current && early(delay),
       turn: f.turn + 1
     }))
   }
   // Letters on every face first, then the flap goes back up (see below)
-  const settle = (letter: string) =>
-    setFaces((f) => ({
+  const settle = (letter: string) => {
+    if (showing(letter, letter)) return settled()
+    change((f) => ({
       ...f,
       from: letter,
       to: letter,
       falling: false,
+      held: false,
       settled: f.settled + 1
     }))
+  }
   // A tile past the end of the text reports once it rests on blank
   const restingBlank = () => {
     if (leave.current && shown.current === ' ' && wanted.current === ' ')
@@ -959,22 +1086,24 @@ const FlapTile = ({
     } else if (!falling.current) {
       if (char !== shown.current) {
         bringing.current = char
-        setFaces((f) => ({ ...f, to: char }))
+        change((f) => ({ ...f, to: char, falling: false }))
       } else settle(char) // which stops the flap, even one not started yet
     }
   }, [char, still, onBlank])
 
   // A hover flips the letter over itself, unless it is already turning or
   // on its way out
-  const shuffled = React.useRef(shuffles)
-  React.useEffect(() => {
-    if (shuffles === shuffled.current) return
-    shuffled.current = shuffles
-    if (!busy.current && !leave.current) turn(delay)
-  }, [shuffles])
-
   useIsomorphicLayoutEffect(() => {
-    if (!faces.turn) return
+    const hover = () => {
+      if (!busy.current && !leave.current) turn(delay)
+    }
+    hovers[index] = hover
+    return () => {
+      if (hovers[index] === hover) hovers[index] = undefined
+    }
+  })
+
+  const fall = () => {
     paint(0)
     // The flap brings another letter unless it flips one over itself (a
     // hover). The faces always hold these two letters (`turn` and a letter
@@ -982,7 +1111,7 @@ const FlapTile = ({
     const changing = () => bringing.current !== shown.current
     const land = () => {
       // The old letter is now under the flap, so it no longer sizes the tile
-      if (changing()) setFaces((f) => ({ ...f, from: f.to }))
+      if (changing()) change((f) => ({ ...f, from: f.to }))
       shown.current = bringing.current
       // With another letter waiting, the next flap drops at once
       if (wanted.current !== shown.current) return turn(0)
@@ -997,22 +1126,28 @@ const FlapTile = ({
       duration: seconds.current * FALL_SHARE,
       delay: wait.current,
       ease: fallEase,
-      onUpdate: (rotateX: number) => {
+      onUpdate: (rotateX: number, elapsed: number) => {
         if (!falling.current && rotateX < 0) {
           // Too late to change letters now; the tile makes room for both
           falling.current = true
-          if (changing()) setFaces((f) => ({ ...f, falling: true }))
+          if (changing()) change((f) => ({ ...f, falling: true, held: false }))
+        } else if (rendered.current.held && !pending.current) {
+          if (elapsed > -LEAD || reveal()) {
+            change((f) => ({ ...f, held: false }))
+          }
         }
         paint(rotateX)
       },
       onComplete: land
     })
+  }
+  useIsomorphicLayoutEffect(() => {
+    if (faces.turn) fall()
   }, [faces.turn])
 
   // With the same letter on every face, the flap can go back up unseen. Up
   // is where it starts, so the halves overlap the same way at every rest.
-  useIsomorphicLayoutEffect(() => {
-    if (!faces.settled) return
+  const settled = () => {
     // Every settle stops the flap: a flip called off in the same render
     // that asked for it was only started after the letter effect settled it
     if (running.current) running.current.stop()
@@ -1020,11 +1155,18 @@ const FlapTile = ({
     busy.current = false
     if (wanted.current !== shown.current) turn(0)
     else restingBlank()
+  }
+  useIsomorphicLayoutEffect(() => {
+    if (faces.settled) settled()
   }, [faces.settled])
 
+  // Stopped, the tile is no longer turning, so a tile mounted again (as
+  // StrictMode does to every new one) starts its flip again
   React.useEffect(
     () => () => {
       if (running.current) running.current.stop()
+      busy.current = false
+      falling.current = false
     },
     []
   )
@@ -1032,13 +1174,15 @@ const FlapTile = ({
   // Until it falls, the tile is sized by the letter it shows; while it falls,
   // by whichever of the two letters is wider
   const was = faces.falling && faces.from !== faces.to ? faces.from : undefined
+  // Held back, the faces the flap hides show the letter it covers
+  const to = faces.held ? faces.from : faces.to
   return (
     <span className={styles.tile} ref={tile}>
       <span className={styles.sizer} data-was={was}>
         {faces.falling ? faces.to : faces.from}
       </span>
       <span className={`${styles.half} ${styles.top} ${styles.readable}`}>
-        {faces.to}
+        {to}
       </span>
       <span className={`${styles.half} ${styles.bottom}`} aria-hidden='true'>
         {faces.from}
@@ -1057,9 +1201,9 @@ const FlapTile = ({
           ref={back}
           className={`${styles.half} ${styles.bottom} ${styles.leaf} ${styles.underside}`}
         >
-          {faces.to}
+          {to}
         </span>
       </span>
     </span>
   )
-}
+})

@@ -1,4 +1,6 @@
 import * as React from 'react';
+export declare const MAX_ELAPSED = 40;
+export declare const frameTime: () => number;
 interface Playback {
     stop: () => void;
 }
@@ -39,7 +41,7 @@ interface TweenOptions {
 }
 export declare type AnimationOptions = (SpringOptions | TweenOptions) & {
     delay?: number;
-    onUpdate?: (latest: number) => void;
+    onUpdate?: (latest: number, elapsed: number) => void;
     onComplete?: () => void;
     onStop?: () => void;
 };
