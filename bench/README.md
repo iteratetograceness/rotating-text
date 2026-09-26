@@ -14,7 +14,7 @@ npx playwright install chromium   # once, if Playwright has no Chromium yet
 npm run bench                     # measures the working copy (src as it is now)
 ```
 
-The repository's own dependencies must be installed (`npx pnpm@7 install`).
+The repository's own dependencies must be installed (`npx yarn@1 install --frozen-lockfile`).
 If they are missing the harness installs them with `--ignore-scripts`, so the
 committed `dist` is not rebuilt.
 
