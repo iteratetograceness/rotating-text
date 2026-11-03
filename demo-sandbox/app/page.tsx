@@ -175,8 +175,8 @@ export default function Home() {
           <h2>Notes</h2>
           <ul className={styles.notes}>
             <li>
-              Works best with one word or a short phrase. Text does not wrap,
-              and spaces collapse, so use one component per word.
+              Works best with one word or a short phrase. Text does not wrap.
+              The roll keeps spaces between words; the flap shows blank tiles.
             </li>
             <li>
               The flip starts on hover. On touch screens, a tap starts it.
