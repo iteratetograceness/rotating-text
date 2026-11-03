@@ -14,7 +14,7 @@ npm install --save rotating-text
 
 ## Usage
 
-`text` updates the content, ignoring spaces.
+`text` updates the content. Spaces remain visible in `roll` and become blank tiles in `flap`.
 `stagger` gives you control over the time between each letter.
 `timing` sets the duration of each letter animation. Timing can be a single numeric value OR a custom timing array, with a specific duration for **each letter** in the `text` (e.g. if `text` is OKAY, your custom timing array can look like `[0.1, 0.4, 0.5, 0.1]`).
 
@@ -87,7 +87,7 @@ The tiles are styled with CSS custom properties, set on `className` or `style`:
 
 ## Notes
 
-1. Text wrapping is currently not supported. RotatingText works best with a single word or short phrase, as spaces are ignored (in the `flap` variant a space is a blank tile).
+1. Text wrapping is currently not supported. RotatingText works best with a single word or short phrase. The `roll` variant keeps spaces between words; the `flap` variant shows a blank tile for each space.
 2. The text flips when the pointer moves onto it, which on a touch screen is a tap. A flip always runs to the end; hovering again mid-flip does nothing.
 
 ## License

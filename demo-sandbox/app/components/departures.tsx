@@ -12,6 +12,8 @@ import styles from './departures.module.css'
 import { CodeBlock } from './code-block'
 import { Flip } from './flip'
 
+type Variant = 'roll' | 'flap'
+
 type Preset = {
   text: string
   stagger: number
@@ -55,6 +57,13 @@ const PRESETS: Preset[] = [
     timing: [0.2, 0.4, 0.6, 0.8, 0.6, 0.4],
     feel: 'Per-letter timing array',
     status: 'On time'
+  },
+  {
+    text: 'HI ALL',
+    stagger: 0.08,
+    timing: 0.5,
+    feel: 'A short phrase with a space',
+    status: 'On time'
   }
 ]
 
@@ -89,7 +98,8 @@ export function snippet(
   text: string,
   stagger: number,
   timing: number | number[],
-  size: number
+  size: number,
+  variant: Variant
 ) {
   // JSX attribute strings decode entities, so anything unusual goes in braces
   const textProp = /["\\{}<>&]/.test(text)
@@ -106,6 +116,7 @@ function MyApp() {
   return (
     <RotatingText
       ${textProp}
+      variant="${variant}"
       stagger={${stagger}}
       ${timingProp}
       style={{ fontSize: '${size}px' }}
@@ -184,6 +195,7 @@ const Board = memo(function Board({
 
 export function Departures() {
   const [text, setText] = useState(DEFAULT_TEXT)
+  const [variant, setVariant] = useState<Variant>('roll')
   const [staggerRaw, setStaggerRaw] = useState('0.1')
   const [stagger, setStagger] = useState(0.1)
   const [timingRaw, setTimingRaw] = useState('0.5')
@@ -191,13 +203,12 @@ export function Departures() {
   const [size, setSize] = useState(96)
   const previewRef = useRef<HTMLDivElement>(null)
 
-  // Largest size, up to 96px, at which the word fits the preview without
-  // scrolling. Display caps with tiles take up to about 0.7em a letter.
+  // Leave room for either variant, including the flap's tile padding and gaps.
   const fitSize = useCallback((word: string) => {
     const box = previewRef.current
     if (!box) return
     const room = box.clientWidth - 48
-    const fit = room / (Array.from(word).length * 0.7)
+    const fit = room / Array.from(word).length
     setSize(Math.max(24, Math.min(96, Math.floor(fit / 4) * 4)))
   }, [])
 
@@ -245,15 +256,16 @@ export function Departures() {
               <span className='sr-only'>{shownText}</span>
               <Flip
                 text={shownText}
+                variant={variant}
+                tiles={false}
                 stagger={stagger}
                 timing={timing}
                 style={{ fontSize: size }}
               />
             </div>
             <p className={styles.hint}>
-              Hover or tap the word. The tiles are this page&apos;s own CSS; the
-              component ships plain letters you style with{' '}
-              <code>className</code>.
+              Hover or tap the text. Roll turns plain letters; flap flips split
+              tiles. The font and colours are styled for this page.
             </p>
           </div>
 
@@ -267,12 +279,33 @@ export function Departures() {
                 value={text}
                 maxLength={24}
                 spellCheck={false}
+                aria-describedby='pg-text-note'
                 onChange={(event: ChangeEvent<HTMLInputElement>) =>
                   setText(event.target.value)
                 }
               />
-              <p>
-                One word or a short phrase. Spaces collapse and nothing wraps.
+              <p id='pg-text-note'>
+                One word or a short phrase. Spaces stay visible in roll and
+                become blank tiles in flap. Text does not wrap.
+              </p>
+            </div>
+            <div className={styles.control}>
+              <label htmlFor='pg-variant' className='label'>
+                Variant
+              </label>
+              <select
+                id='pg-variant'
+                value={variant}
+                aria-describedby='pg-variant-note'
+                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                  setVariant(event.target.value as Variant)
+                }
+              >
+                <option value='roll'>Roll — rotating letters</option>
+                <option value='flap'>Flap — split-flap tiles</option>
+              </select>
+              <p id='pg-variant-note'>
+                Choose an effect. The preview and code update together.
               </p>
             </div>
             <div className={styles.control}>
@@ -354,7 +387,7 @@ export function Departures() {
         <div className={styles.snippet}>
           <span className='label'>Your snippet</span>
           <CodeBlock
-            code={snippet(shownText, stagger, timing, size)}
+            code={snippet(shownText, stagger, timing, size, variant)}
             what='playground snippet'
             title='MyApp.tsx'
           />

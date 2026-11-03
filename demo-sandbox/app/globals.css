@@ -63,7 +63,8 @@ a:hover {
 
 a:focus-visible,
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 2px solid var(--signal);
   outline-offset: 3px;
 }
@@ -114,7 +115,8 @@ pre code {
    0.19em across (padding plus margin), so the hidden placeholder that sizes
    the component gets the same width back through letter-spacing. */
 .rt-tiles span {
-  background: linear-gradient(
+  background:
+    linear-gradient(
       to bottom,
       transparent calc(50% - 0.5px),
       var(--seam) calc(50% - 0.5px),

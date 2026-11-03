@@ -56,7 +56,9 @@
   border-radius: 4px;
   padding: 8px 12px;
   cursor: pointer;
-  transition: color 120ms, border-color 120ms;
+  transition:
+    color 120ms,
+    border-color 120ms;
 }
 
 .try:hover {
@@ -114,7 +116,8 @@
   justify-content: space-between;
 }
 
-.control input:not([type='range']) {
+.control input:not([type='range']),
+.control select {
   font: 500 16px var(--mono);
   color: var(--ink);
   background: var(--flap);
@@ -263,7 +266,8 @@
     padding-inline: 16px;
   }
 
-  .control input:not([type='range']) {
+  .control input:not([type='range']),
+  .control select {
     min-height: 44px;
   }
 
